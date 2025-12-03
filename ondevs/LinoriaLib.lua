@@ -2653,10 +2653,13 @@ do
         local Groupbox = self;
         local Container = Groupbox.Container;
         
+        -- Calculate height based on max rows
+        local TableHeight = 20 + (Table.MaxRows * 18) + 2;
+        
         local TableOuter = Library:Create('Frame', {
             BackgroundColor3 = Color3.new(0, 0, 0);
             BorderSizePixel = 1;
-            Size = UDim2.new(1, -4, 0, 20 + (Table.MaxRows * 18) + 2);
+            Size = UDim2.new(1, -4, 0, TableHeight);
             ZIndex = 5;
             Parent = Container;
         });
