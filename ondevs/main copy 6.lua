@@ -1,12 +1,11 @@
 -- hubsense - Word Suggester Hub
 -- Skeet/GameSense Style UI
 
-local repo = 'https://raw.githubusercontent.com/xXehub/hubsense-lib/refs/heads/main/ondevs/'
-local linoriaRepo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
 
-local Library = loadstring(game:HttpGet(repo .. 'LinoriaLib.lua'))()
-local ThemeManager = loadstring(game:HttpGet(linoriaRepo .. 'addons/ThemeManager.lua'))()
-local SaveManager = loadstring(game:HttpGet(linoriaRepo .. 'addons/SaveManager.lua'))()
+local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
 
 -- Word Suggester Variables
 local url = "https://raw.githubusercontent.com/dwyl/english-words/refs/heads/master/words.txt"
@@ -15,7 +14,6 @@ local loaded = false
 local WordDictionary = {}
 local searchCache = {}
 local minCharacters = 1
-
 local maxCharacters = 100
 local currentPage = 1
 local wordsPerPage = 50
@@ -340,18 +338,18 @@ pcall(function()
 end)
 
 local Window = Library:CreateWindow({
-	Title = 'hubsense | sakkarepmu',
+	Title = 'hubsense | Word Suggester',
 	Center = true,
 	AutoShow = true,
 	TabPadding = 8,
 	MenuFadeTime = 0.2
 })
 
--- Side navbar: Main + Visual + Configuration
+-- Side navbar: Main + Visual + UI Config
 local Tabs = {
 	Main = Window:AddTab('Main'),
 	Visual = Window:AddTab('Visual'),
-	['Configuration'] = Window:AddTab('Configuration'),
+	['UI Config'] = Window:AddTab('UI Config'),
 }
 
 -- Card: Word Search with Tabbox (Word + Settings)
@@ -364,60 +362,6 @@ local SettingsTab = WordTabs:AddTab('Settings')
 local StatusLabel = SettingsTab:AddLabel('Database Status: Loading...', true)
 local FilterLabel = SettingsTab:AddLabel('Filter: Min 1 - Max 100 chars', true)
 SettingsTab:AddDivider()
-
--- Search Results in separate card (CREATE FIRST)
-local ResultsBox = Tabs.Main:AddLeftGroupbox('Search Results')
-local PageInfoLabel = ResultsBox:AddLabel('Page: 1 / 1 | Total: 0 words', true)
-ResultsBox:AddDivider()
-
--- Table with proper widget
-local ResultsTable = ResultsBox:AddTable({
-	Headers = {'No', 'Word'};
-	ColumnWidths = {50, 180};
-	MaxRows = 15;
-})
-
--- Update results display function (define before use)
-local function UpdateResultsDisplay()
-	local startIndex = (currentPage - 1) * wordsPerPage + 1
-	local endIndex = math.min(currentPage * wordsPerPage, #currentSearchResults)
-
-	print("[DEBUG] UpdateResultsDisplay called")
-	print("[DEBUG] currentSearchResults count:", #currentSearchResults)
-	print("[DEBUG] startIndex:", startIndex, "endIndex:", endIndex)
-
-	if #currentSearchResults == 0 or startIndex > endIndex then
-		-- Clear table when no results
-		ResultsTable:Clear()
-		PageInfoLabel:SetText('Page: 1 / 1 | Total: 0 words')
-		print("[DEBUG] Cleared table - no results")
-		return
-	end
-
-	-- Build rows data
-	local rowsData = {}
-	for i = startIndex, endIndex do
-		if #rowsData >= 15 then break end
-		local no = string.format('%02d', i)
-		local word = currentSearchResults[i]
-		table.insert(rowsData, {no, word})
-	end
-
-	print("[DEBUG] Built rowsData with", #rowsData, "rows")
-	print("[DEBUG] First row:", rowsData[1] and rowsData[1][1], rowsData[1] and rowsData[1][2])
-
-	-- Update table with new data
-	ResultsTable:SetRows(rowsData)
-	print("[DEBUG] SetRows called")
-
-	local totalPages = math.ceil(#currentSearchResults / wordsPerPage)
-	PageInfoLabel:SetText('Page: ' .. currentPage .. ' / ' .. totalPages .. ' | Total: ' .. #currentSearchResults .. ' words')
-end
-
--- Hook updates to search and pagination
-local function Refresh()
-	UpdateResultsDisplay()
-end
 
 -- Search Input
 WordTab:AddInput('SearchInput', {
@@ -432,11 +376,11 @@ WordTab:AddInput('SearchInput', {
 		if Value == '' or #Value < 1 then
 			currentSearchResults = {}
 			currentPage = 1
-			UpdateResultsDisplay()
 			return
 		end
 		currentPage = 1
 		currentSearchResults = SuggestWords(Value, 1000)
+		-- refresh results display
 		UpdateResultsDisplay()
 	end
 })
@@ -455,6 +399,23 @@ WordTab:AddDropdown('QuickSearch', {
 })
 
 WordTab:AddDivider()
+
+-- Search Results in separate card
+local ResultsBox = Tabs.Main:AddLeftGroupbox('Search Results')
+
+local PageInfoLabel = ResultsBox:AddLabel('Page: 1 / 1 | Total: 0 words', true)
+ResultsBox:AddDivider()
+
+-- Table with proper column formatting
+local ROWS = 15
+local RowLabels = {}
+
+-- Add table rows with column formatting (No | Result)
+for i = 1, ROWS do
+	RowLabels[i] = ResultsBox:AddLabel('', false)
+end
+
+ResultsBox:AddDivider()
 
 -- Pagination controls inline
 WordTab:AddButton({
@@ -483,6 +444,54 @@ WordTab:AddButton({
 })
 
 WordTab:AddDivider()
+
+-- Update results display function
+local function UpdateResultsDisplay()
+	local startIndex = (currentPage - 1) * wordsPerPage + 1
+	local endIndex = math.min(currentPage * wordsPerPage, #currentSearchResults)
+
+	if #currentSearchResults == 0 or startIndex > endIndex then
+		-- Clear all rows when no results
+		for i = 1, ROWS do
+			RowLabels[i]:SetText('')
+		end
+		PageInfoLabel:SetText('Page: 1 / 1 | Total: 0 words')
+		return
+	end
+
+	-- Fill visible rows with formatted table data
+	local row = 1
+	for i = startIndex, endIndex do
+		if row > ROWS then break end
+		local no = string.format('%02d', i)
+		local word = currentSearchResults[i]
+		-- Format: "No | Result" with proper spacing
+		RowLabels[row]:SetText(string.format('%-4s | %s', no, word))
+		row = row + 1
+	end
+	-- Clear remaining empty rows
+	for i = row, ROWS do
+		RowLabels[i]:SetText('')
+	end
+
+	local totalPages = math.ceil(#currentSearchResults / wordsPerPage)
+	PageInfoLabel:SetText('Page: ' .. currentPage .. ' / ' .. totalPages .. ' | Total: ' .. #currentSearchResults .. ' words')
+end
+
+-- Hook updates to search and pagination
+local function Refresh()
+	UpdateResultsDisplay()
+end
+
+-- Update results when typing
+Options.SearchInput:OnChanged(function()
+	Refresh()
+end)
+
+-- Also refresh every frame for page changes (lightweight)
+game:GetService('RunService').RenderStepped:Connect(function()
+	Refresh()
+end)
 
 -- Settings sub-tab
 SettingsTab:AddSlider('MinChars', {
@@ -725,7 +734,7 @@ ESPColorsBox:AddLabel('Box Color:'):AddColorPicker('BoxColor', {
 })
 
 -- ==================== UI CONFIG TAB ====================
-local MenuGroup = Tabs['Configuration']:AddLeftGroupbox('Menu')
+local MenuGroup = Tabs['UI Config']:AddLeftGroupbox('Menu')
 
 MenuGroup:AddButton({
 	Text = '⚠️ Unload UI',
@@ -795,8 +804,8 @@ SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
 ThemeManager:SetFolder('hubsense')
 SaveManager:SetFolder('hubsense/WordSuggester')
 
-SaveManager:BuildConfigSection(Tabs['Configuration'])
-ThemeManager:ApplyToTab(Tabs['Configuration'])
+SaveManager:BuildConfigSection(Tabs['UI Config'])
+ThemeManager:ApplyToTab(Tabs['UI Config'])
 
 -- Set GameSense/Skeet theme
 ThemeManager:ApplyTheme('Default')

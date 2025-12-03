@@ -30,10 +30,10 @@ local Library = {
     HudRegistry = {};
 
     FontColor = Color3.fromRGB(255, 255, 255);
-    MainColor = Color3.fromRGB(25, 25, 25);
-    BackgroundColor = Color3.fromRGB(12, 12, 12);
-    AccentColor = Color3.fromRGB(255, 120, 30);
-    OutlineColor = Color3.fromRGB(40, 40, 40);
+    MainColor = Color3.fromRGB(28, 28, 28);
+    BackgroundColor = Color3.fromRGB(20, 20, 20);
+    AccentColor = Color3.fromRGB(0, 85, 255);
+    OutlineColor = Color3.fromRGB(50, 50, 50);
     RiskColor = Color3.fromRGB(255, 50, 50),
 
     Black = Color3.new(0, 0, 0);
@@ -159,51 +159,6 @@ function Library:CreateLabel(Properties, IsHud)
     }, IsHud);
 
     return Library:Create(_Instance, Properties);
-end;
-
-function Library:MakeResizable(Instance, MinSize)
-    MinSize = MinSize or Vector2.new(400, 300);
-    
-    local ResizeFrame = Library:Create('Frame', {
-        BackgroundColor3 = Library.AccentColor;
-        BorderSizePixel = 0;
-        Position = UDim2.new(1, -10, 1, -10);
-        Size = UDim2.new(0, 10, 0, 10);
-        ZIndex = 999;
-        Parent = Instance;
-    });
-    
-    Library:AddToRegistry(ResizeFrame, {
-        BackgroundColor3 = 'AccentColor';
-    });
-    
-    local Resizing = false;
-    local InitialSize, InitialMouse;
-    
-    ResizeFrame.InputBegan:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-            Resizing = true;
-            InitialSize = Instance.Size;
-            InitialMouse = Vector2.new(Mouse.X, Mouse.Y);
-            
-            Input.Changed:Connect(function()
-                if Input.UserInputState == Enum.UserInputState.End then
-                    Resizing = false;
-                end;
-            end);
-        end;
-    end);
-    
-    InputService.InputChanged:Connect(function(Input)
-        if Resizing and Input.UserInputType == Enum.UserInputType.MouseMovement then
-            local Delta = Vector2.new(Mouse.X, Mouse.Y) - InitialMouse;
-            local NewSize = Vector2.new(
-                math.max(InitialSize.X.Offset + Delta.X, MinSize.X),
-                math.max(InitialSize.Y.Offset + Delta.Y, MinSize.Y)
-            );
-            Instance.Size = UDim2.new(InitialSize.X.Scale, NewSize.X, InitialSize.Y.Scale, NewSize.Y);
-        end;
-    end);
 end;
 
 function Library:MakeDraggable(Instance, Cutoff)
@@ -3202,7 +3157,6 @@ function Library:CreateWindow(...)
     });
 
     Library:MakeDraggable(Outer, 25);
-    Library:MakeResizable(Outer, Vector2.new(450, 400));
 
     local Inner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
