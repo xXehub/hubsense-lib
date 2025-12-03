@@ -789,6 +789,9 @@ SaveManager:SetFolder('hubsense/WordSuggester')
 SaveManager:BuildConfigSection(Tabs['Configuration'])
 ThemeManager:ApplyToTab(Tabs['Configuration'])
 
+-- Add spacing to prevent overflow
+Tabs['Configuration']:AddLeftGroupbox('Spacing'):AddLabel('')
+
 -- Set GameSense/Skeet theme
 ThemeManager:ApplyTheme('Default')
 
