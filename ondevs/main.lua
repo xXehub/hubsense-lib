@@ -344,7 +344,8 @@ local Window = Library:CreateWindow({
 	Center = true,
 	AutoShow = true,
 	TabPadding = 8,
-	MenuFadeTime = 0.2
+	MenuFadeTime = 0.2,
+	Size = UDim2.fromOffset(660, 560)
 })
 
 -- Side navbar: Main + Visual + Configuration
@@ -373,7 +374,6 @@ ResultsBox:AddDivider()
 -- Table with proper widget
 local ResultsTable = ResultsBox:AddTable({
 	Headers = {'No', 'Word'};
-	ColumnWidths = {50, 180};
 	MaxRows = 15;
 })
 
@@ -382,15 +382,10 @@ local function UpdateResultsDisplay()
 	local startIndex = (currentPage - 1) * wordsPerPage + 1
 	local endIndex = math.min(currentPage * wordsPerPage, #currentSearchResults)
 
-	print("[DEBUG] UpdateResultsDisplay called")
-	print("[DEBUG] currentSearchResults count:", #currentSearchResults)
-	print("[DEBUG] startIndex:", startIndex, "endIndex:", endIndex)
-
 	if #currentSearchResults == 0 or startIndex > endIndex then
 		-- Clear table when no results
 		ResultsTable:Clear()
 		PageInfoLabel:SetText('Page: 1 / 1 | Total: 0 words')
-		print("[DEBUG] Cleared table - no results")
 		return
 	end
 
@@ -403,12 +398,8 @@ local function UpdateResultsDisplay()
 		table.insert(rowsData, {no, word})
 	end
 
-	print("[DEBUG] Built rowsData with", #rowsData, "rows")
-	print("[DEBUG] First row:", rowsData[1] and rowsData[1][1], rowsData[1] and rowsData[1][2])
-
 	-- Update table with new data
 	ResultsTable:SetRows(rowsData)
-	print("[DEBUG] SetRows called")
 
 	local totalPages = math.ceil(#currentSearchResults / wordsPerPage)
 	PageInfoLabel:SetText('Page: ' .. currentPage .. ' / ' .. totalPages .. ' | Total: ' .. #currentSearchResults .. ' words')

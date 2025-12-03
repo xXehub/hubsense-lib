@@ -2647,21 +2647,11 @@ do
             Headers = Info.Headers or {};
             Rows = {};
             MaxRows = Info.MaxRows or 10;
-            ColumnWidths = Info.ColumnWidths or {};
             Type = 'Table';
         };
         
         local Groupbox = self;
         local Container = Groupbox.Container;
-        
-        -- Calculate column widths
-        local TotalWidth = 0;
-        for i, Header in ipairs(Table.Headers) do
-            if not Table.ColumnWidths[i] then
-                Table.ColumnWidths[i] = 100; -- Default width
-            end;
-            TotalWidth = TotalWidth + Table.ColumnWidths[i];
-        end;
         
         local TableOuter = Library:Create('Frame', {
             BackgroundColor3 = Color3.new(0, 0, 0);
@@ -2698,11 +2688,14 @@ do
             BackgroundColor3 = 'MainColor';
         });
         
-        local XOffset = 0;
+        -- Calculate flexible column widths
+        local NumColumns = #Table.Headers;
+        local ColumnWidth = 1 / NumColumns;
+        
         for i, HeaderText in ipairs(Table.Headers) do
             local HeaderLabel = Library:CreateLabel({
-                Position = UDim2.new(0, XOffset + 4, 0, 3);
-                Size = UDim2.new(0, Table.ColumnWidths[i] - 8, 0, 14);
+                Position = UDim2.new(ColumnWidth * (i - 1), 4, 0, 3);
+                Size = UDim2.new(ColumnWidth, -8, 0, 14);
                 Text = HeaderText;
                 TextSize = 14;
                 TextXAlignment = Enum.TextXAlignment.Left;
@@ -2715,14 +2708,12 @@ do
                 Library:Create('Frame', {
                     BackgroundColor3 = Library.OutlineColor;
                     BorderSizePixel = 0;
-                    Position = UDim2.new(0, XOffset + Table.ColumnWidths[i], 0, 0);
+                    Position = UDim2.new(ColumnWidth * i, 0, 0, 0);
                     Size = UDim2.new(0, 1, 1, 0);
                     ZIndex = 8;
                     Parent = HeaderRow;
                 });
             end;
-            
-            XOffset = XOffset + Table.ColumnWidths[i];
         end;
         
         -- Divider line below header
@@ -2768,6 +2759,9 @@ do
         end;
         
         function Table:AddRow(RowData)
+            local NumColumns = #Table.Headers;
+            local ColumnWidth = 1 / NumColumns;
+            
             local RowFrame = Library:Create('Frame', {
                 BackgroundColor3 = (#Table.Rows % 2 == 0) and Library.BackgroundColor or Library:GetDarkerColor(Library.BackgroundColor);
                 BorderSizePixel = 0;
@@ -2782,11 +2776,10 @@ do
                 end;
             });
             
-            local XOffset = 0;
             for i, CellData in ipairs(RowData) do
                 local CellLabel = Library:CreateLabel({
-                    Position = UDim2.new(0, XOffset + 4, 0, 2);
-                    Size = UDim2.new(0, Table.ColumnWidths[i] - 8, 0, 14);
+                    Position = UDim2.new(ColumnWidth * (i - 1), 4, 0, 2);
+                    Size = UDim2.new(ColumnWidth, -8, 0, 14);
                     Text = tostring(CellData);
                     TextSize = 13;
                     TextXAlignment = Enum.TextXAlignment.Left;
@@ -2799,14 +2792,12 @@ do
                     Library:Create('Frame', {
                         BackgroundColor3 = Library.OutlineColor;
                         BorderSizePixel = 0;
-                        Position = UDim2.new(0, XOffset + Table.ColumnWidths[i], 0, 0);
+                        Position = UDim2.new(ColumnWidth * i, 0, 0, 0);
                         Size = UDim2.new(0, 1, 1, 0);
                         ZIndex = 9;
                         Parent = RowFrame;
                     });
                 end;
-                
-                XOffset = XOffset + Table.ColumnWidths[i];
             end;
             
             table.insert(Table.Rows, RowFrame);
