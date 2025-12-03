@@ -2,11 +2,10 @@
 -- Skeet/GameSense Style UI
 
 local repo = 'https://raw.githubusercontent.com/xXehub/hubsense-lib/refs/heads/main/ondevs/'
-local linoriaRepo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
 
 local Library = loadstring(game:HttpGet(repo .. 'LinoriaLib.lua'))()
-local ThemeManager = loadstring(game:HttpGet(linoriaRepo .. 'addons/ThemeManager.lua'))()
-local SaveManager = loadstring(game:HttpGet(linoriaRepo .. 'addons/SaveManager.lua'))()
+local ThemeManager = loadstring(readfile('ThemeManager.lua'))()
+local SaveManager = loadstring(readfile('SaveManager.lua'))()
 
 -- Word Suggester Variables
 local url = "https://raw.githubusercontent.com/dwyl/english-words/refs/heads/master/words.txt"
@@ -788,9 +787,6 @@ SaveManager:SetFolder('hubsense/WordSuggester')
 
 SaveManager:BuildConfigSection(Tabs['Configuration'])
 ThemeManager:ApplyToTab(Tabs['Configuration'])
-
--- Add spacing to prevent overflow
-Tabs['Configuration']:AddLeftGroupbox('Spacing'):AddLabel('')
 
 -- Set GameSense/Skeet theme
 ThemeManager:ApplyTheme('Default')
