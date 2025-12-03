@@ -2653,13 +2653,14 @@ do
         local Groupbox = self;
         local Container = Groupbox.Container;
         
-        -- Calculate height based on max rows
-        local TableHeight = 20 + (Table.MaxRows * 18) + 2;
+        -- Calculate height based on max rows (header 20px + divider 1px + rows + spacing)
+        local TableHeight = 21 + (Table.MaxRows * 18);
         
         local TableOuter = Library:Create('Frame', {
             BackgroundColor3 = Color3.new(0, 0, 0);
             BorderSizePixel = 1;
             Size = UDim2.new(1, -4, 0, TableHeight);
+            ClipsDescendants = true;
             ZIndex = 5;
             Parent = Container;
         });
@@ -2668,6 +2669,7 @@ do
             BackgroundColor3 = Library.BackgroundColor;
             BorderColor3 = Library.OutlineColor;
             BorderMode = Enum.BorderMode.Inset;
+            ClipsDescendants = true;
             Size = UDim2.new(1, 0, 1, 0);
             ZIndex = 6;
             Parent = TableOuter;
@@ -2733,6 +2735,7 @@ do
         local ScrollingFrame = Library:Create('ScrollingFrame', {
             BackgroundTransparency = 1;
             BorderSizePixel = 0;
+            ClipsDescendants = true;
             Position = UDim2.new(0, 0, 0, 21);
             Size = UDim2.new(1, 0, 1, -21);
             CanvasSize = UDim2.new(0, 0, 0, 0);
@@ -2768,7 +2771,7 @@ do
             local RowFrame = Library:Create('Frame', {
                 BackgroundColor3 = (#Table.Rows % 2 == 0) and Library.BackgroundColor or Library:GetDarkerColor(Library.BackgroundColor);
                 BorderSizePixel = 0;
-                Size = UDim2.new(1, -4, 0, 18);
+                Size = UDim2.new(1, 0, 0, 18);
                 ZIndex = 8;
                 Parent = ScrollingFrame;
             });
