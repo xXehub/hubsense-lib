@@ -479,26 +479,14 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
-        -- Determine if this is from a Toggle or a Label
-        -- Label: ToggleLabel.Parent == Container (TextLabel directly in Container)
-        -- Toggle: ToggleLabel.Parent == ToggleInner, ToggleInner.Parent == ToggleOuter, ToggleOuter.Parent == Container
-        local IsToggle = ToggleLabel.Parent ~= Container
-        local ParentForColorPicker = ToggleLabel -- Default: use ToggleLabel (for Labels with UIListLayout)
-        
-        if IsToggle then
-            -- For Toggle, go up to ToggleOuter level
-            ParentForColorPicker = ToggleLabel.Parent.Parent -- ToggleInner.Parent = ToggleOuter
-        end
-
         local DisplayFrame = Library:Create('Frame', {
             BackgroundColor3 = ColorPicker.Value;
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
             Size = UDim2.new(0, 28, 0, 14);
-            Position = IsToggle and UDim2.new(1, -4, 0.5, -7) or nil;
-            AnchorPoint = IsToggle and Vector2.new(1, 0.5) or nil;
+            LayoutOrder = 100;
             ZIndex = 6;
-            Parent = ParentForColorPicker;
+            Parent = ToggleLabel;
         });
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
