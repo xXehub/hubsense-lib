@@ -1912,9 +1912,11 @@ do
             Parent = ToggleInner;
         });
 
-        if Info.Text then
-            ToggleLabel.Text = '    ' .. Info.Text
-        end
+        Library:Create('UIPadding', {
+            PaddingLeft = UDim.new(0, 18);
+            PaddingRight = UDim.new(0, 4);
+            Parent = ToggleLabel;
+        });
 
         Library:Create('UIListLayout', {
             Padding = UDim.new(0, 4);
