@@ -484,8 +484,6 @@ do
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
             Size = UDim2.new(0, 28, 0, 14);
-            Position = UDim2.new(1, -28, 0.5, -7);
-            AnchorPoint = Vector2.new(1, 0.5);
             ZIndex = 6;
             Parent = ToggleLabel;
         });

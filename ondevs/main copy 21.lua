@@ -1085,13 +1085,9 @@ ESPBox:AddToggle('EnableESP', {
 	Callback = function(Value)
 		ToggleESP(Value)
 	end
-}):AddKeyPicker('ESPKeybind', {
-	Default = 'F2',
-	SyncToggleState = true,
-	Mode = 'Toggle',
-	Text = 'ESP Keybind',
-	NoUI = false
 })
+
+ESPBox:AddDivider()
 
 ESPBox:AddToggle('ShowName', {
 	Text = 'Show Names',
@@ -1240,6 +1236,8 @@ ESPBox:AddToggle('TeamCheck', {
 	end
 })
 
+ESPBox:AddDivider()
+
 ESPBox:AddSlider('MaxDistance', {
 	Text = 'Max Distance',
 	Default = 1000,
@@ -1254,18 +1252,16 @@ ESPBox:AddSlider('MaxDistance', {
 
 local ESPPreviewBox = Tabs.Visual:AddRightGroupbox('ESP Preview')
 
-local PreviewButton = ESPPreviewBox:AddButton({
+ESPPreviewBox:AddToggle('ShowPreview', {
 	Text = 'Show Preview',
+	Default = false,
 	Tooltip = 'Toggle ESP Preview window',
-	Func = function()
+	Callback = function(Value)
 		if ESPPreviewFrame and ESPPreviewFrame.Window then
-			local isVisible = ESPPreviewFrame.Window.Holder.Visible
-			if isVisible then
-				ESPPreviewFrame.Window:Hide()
-				PreviewButton:SetText('Show Preview')
-			else
+			if Value then
 				ESPPreviewFrame.Window:Show()
-				PreviewButton:SetText('Hide Preview')
+			else
+				ESPPreviewFrame.Window:Hide()
 			end
 		end
 	end
@@ -1289,6 +1285,8 @@ ESPPreviewBox:AddButton({
 		end
 	end
 })
+
+ESPPreviewBox:AddDivider()
 
 ESPPreviewBox:AddSlider('AvatarRotation', {
 	Text = 'Avatar Rotation',
@@ -1316,6 +1314,8 @@ ESPPreviewBox:AddButton({
 		end
 	end
 })
+
+ESPPreviewBox:AddDivider()
 
 ESPPreviewBox:AddSlider('CameraZoom', {
 	Text = 'Camera Zoom',
