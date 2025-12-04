@@ -479,15 +479,32 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
+        -- If this color picker is attached to a toggle, switch to absolute right alignment
+        local IsToggle = (ToggleLabel.Parent ~= Container)
+        if IsToggle then
+            -- Remove UIListLayout to allow absolute positioning (only for toggle labels)
+            for _, child in ipairs(ToggleLabel:GetChildren()) do
+                if child:IsA('UIListLayout') then
+                    child:Destroy()
+                end
+            end
+        end
+
         local DisplayFrame = Library:Create('Frame', {
             BackgroundColor3 = ColorPicker.Value;
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
             Size = UDim2.new(0, 28, 0, 14);
-            LayoutOrder = 999; -- ensure rightmost in UIListLayout
+            LayoutOrder = 999; -- keep order for label-only cases
             ZIndex = 6;
             Parent = ToggleLabel;
         });
+
+        if IsToggle then
+            -- Anchor to right-middle of the toggle label row
+            DisplayFrame.AnchorPoint = Vector2.new(1, 0.5)
+            DisplayFrame.Position = UDim2.new(1, -4, 0.5, 0)
+        end
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
         local CheckerFrame = Library:Create('ImageLabel', {
