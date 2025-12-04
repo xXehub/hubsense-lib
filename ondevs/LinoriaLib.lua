@@ -479,15 +479,22 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
+        -- Find the actual row container (for toggle it's ToggleOuter, for label it's the TextLabel itself)
+        local RowContainer = ToggleLabel.Parent
+        if RowContainer.ClassName == 'Frame' and RowContainer.Parent == Container then
+            -- This is a Toggle (ToggleInner -> ToggleOuter -> Container)
+            RowContainer = RowContainer.Parent
+        end
+
         local DisplayFrame = Library:Create('Frame', {
             BackgroundColor3 = ColorPicker.Value;
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
             Size = UDim2.new(0, 28, 0, 14);
-            Position = UDim2.new(1, -32, 0, 0);
-            AnchorPoint = Vector2.new(0, 0);
+            Position = UDim2.new(1, -32, 0.5, -7);
+            AnchorPoint = Vector2.new(0, 0.5);
             ZIndex = 6;
-            Parent = ToggleLabel.Parent;
+            Parent = RowContainer;
         });
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
