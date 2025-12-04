@@ -888,11 +888,10 @@ SaveManager:LoadAutoloadConfig()
 local SecondaryWindow = Library:CreateSecondaryWindow({
 	Title = 'ESP Preview';
 	ParentWindow = Window;  -- Attach to main window
-	StickyMode = true;  -- Follow parent window
+	StickyMode = true;  -- Follow parent window (NOT draggable!)
 	OffsetFromParent = Vector2.new(10, 0);  -- 10px gap to the right
 	Size = UDim2.fromOffset(280, 350);
-	Resizable = true;
-	MinSize = Vector2.new(250, 300);
+	Resizable = false;  -- Disabled when sticky
 	MinimizeKey = 'End';  -- Press End to minimize/restore
 	AutoShow = true;
 })

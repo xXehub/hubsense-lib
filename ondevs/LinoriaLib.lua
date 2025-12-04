@@ -4173,9 +4173,12 @@ function Library:CreateSecondaryWindow(Config)
     -- Only make draggable if NOT in sticky mode
     if not StickyMode then
         Library:MakeDraggable(Outer, 25);
+    else
+        -- Explicitly disable for sticky mode
+        Outer.Active = false;
     end;
     
-    if Config.Resizable then
+    if Config.Resizable and not StickyMode then
         Library:MakeResizable(Outer, Config.MinSize or Vector2.new(250, 200));
     end
     
@@ -4201,6 +4204,7 @@ function Library:CreateSecondaryWindow(Config)
         Position = UDim2.new(0, 0, 0, 0);
         Size = UDim2.new(1, 0, 0, 25);
         ZIndex = 2;
+        Active = not StickyMode;  -- Disable input if sticky
         Parent = Inner;
     });
     
