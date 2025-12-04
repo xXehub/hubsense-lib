@@ -4120,6 +4120,226 @@ function Library:CreateWindow(...)
     return Window;
 end;
 
+function Library:CreateSecondaryWindow(Config)
+    -- Create a secondary/child window for additional UI (e.g., ESP Preview)
+    Config = Config or {};
+    
+    if type(Config.Title) ~= 'string' then Config.Title = 'Secondary Window' end
+    if typeof(Config.Position) ~= 'UDim2' then Config.Position = UDim2.fromOffset(750, 50) end
+    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(300, 400) end
+    if Config.MinimizeKey == nil then Config.MinimizeKey = true end
+    
+    local SecondaryWindow = {
+        Visible = true;
+        Minimized = false;
+    };
+    
+    -- Outer frame (black border)
+    local Outer = Library:Create('Frame', {
+        BackgroundColor3 = Color3.new(0, 0, 0);
+        BorderSizePixel = 0;
+        Position = Config.Position;
+        Size = Config.Size;
+        Visible = Config.AutoShow ~= false;
+        ZIndex = 1;
+        Parent = ScreenGui;
+    });
+    
+    Library:MakeDraggable(Outer, 25);
+    if Config.Resizable then
+        Library:MakeResizable(Outer, Config.MinSize or Vector2.new(250, 200));
+    end
+    
+    -- Inner frame (main color with accent border)
+    local Inner = Library:Create('Frame', {
+        BackgroundColor3 = Library.MainColor;
+        BorderColor3 = Library.AccentColor;
+        BorderMode = Enum.BorderMode.Inset;
+        Position = UDim2.new(0, 1, 0, 1);
+        Size = UDim2.new(1, -2, 1, -2);
+        ZIndex = 1;
+        Parent = Outer;
+    });
+    
+    Library:AddToRegistry(Inner, {
+        BackgroundColor3 = 'MainColor';
+        BorderColor3 = 'AccentColor';
+    });
+    
+    -- Title bar area
+    local TitleBar = Library:Create('Frame', {
+        BackgroundTransparency = 1;
+        Position = UDim2.new(0, 0, 0, 0);
+        Size = UDim2.new(1, 0, 0, 25);
+        ZIndex = 2;
+        Parent = Inner;
+    });
+    
+    -- Window title label
+    local WindowLabel = Library:CreateLabel({
+        Position = UDim2.new(0, 7, 0, 0);
+        Size = UDim2.new(1, -30, 0, 25);
+        Text = Config.Title or 'Secondary Window';
+        TextXAlignment = Enum.TextXAlignment.Left;
+        ZIndex = 3;
+        Parent = TitleBar;
+    });
+    
+    -- Minimize button
+    local MinimizeButton = Library:Create('TextButton', {
+        BackgroundColor3 = Library.BackgroundColor;
+        BorderColor3 = Library.OutlineColor;
+        Position = UDim2.new(1, -20, 0, 4);
+        Size = UDim2.new(0, 16, 0, 16);
+        Text = '';
+        ZIndex = 4;
+        Parent = TitleBar;
+    });
+    
+    Library:AddToRegistry(MinimizeButton, {
+        BackgroundColor3 = 'BackgroundColor';
+        BorderColor3 = 'OutlineColor';
+    });
+    
+    local MinimizeIcon = Library:CreateLabel({
+        Size = UDim2.new(1, 0, 1, 0);
+        Text = '_';
+        TextSize = 14;
+        Position = UDim2.new(0, 0, 0, -4);
+        ZIndex = 5;
+        Parent = MinimizeButton;
+    });
+    
+    -- Content area
+    local ContentOuter = Library:Create('Frame', {
+        BackgroundColor3 = Library.BackgroundColor;
+        BorderColor3 = Library.OutlineColor;
+        Position = UDim2.new(0, 8, 0, 28);
+        Size = UDim2.new(1, -16, 1, -36);
+        ZIndex = 2;
+        Parent = Inner;
+    });
+    
+    Library:AddToRegistry(ContentOuter, {
+        BackgroundColor3 = 'BackgroundColor';
+        BorderColor3 = 'OutlineColor';
+    });
+    
+    local ContentInner = Library:Create('Frame', {
+        BackgroundColor3 = Library.BackgroundColor;
+        BorderColor3 = Color3.new(0, 0, 0);
+        BorderMode = Enum.BorderMode.Inset;
+        Size = UDim2.new(1, 0, 1, 0);
+        ZIndex = 3;
+        Parent = ContentOuter;
+    });
+    
+    Library:AddToRegistry(ContentInner, {
+        BackgroundColor3 = 'BackgroundColor';
+    });
+    
+    -- Container for content (with padding)
+    local Container = Library:Create('Frame', {
+        BackgroundTransparency = 1;
+        Position = UDim2.new(0, 8, 0, 8);
+        Size = UDim2.new(1, -16, 1, -16);
+        ZIndex = 4;
+        Parent = ContentInner;
+    });
+    
+    -- Store original size for minimize/restore
+    local OriginalSize = Config.Size;
+    local MinimizedSize = UDim2.new(Config.Size.X.Scale, Config.Size.X.Offset, 0, 33);
+    
+    -- Minimize/Restore function
+    local function ToggleMinimize()
+        SecondaryWindow.Minimized = not SecondaryWindow.Minimized;
+        
+        if SecondaryWindow.Minimized then
+            -- Minimize
+            Outer.Size = MinimizedSize;
+            ContentOuter.Visible = false;
+            MinimizeIcon.Text = '+';
+            MinimizeIcon.Position = UDim2.new(0, 0, 0, -2);
+        else
+            -- Restore
+            Outer.Size = OriginalSize;
+            ContentOuter.Visible = true;
+            MinimizeIcon.Text = '_';
+            MinimizeIcon.Position = UDim2.new(0, 0, 0, -4);
+        end;
+    end;
+    
+    MinimizeButton.MouseButton1Click:Connect(ToggleMinimize);
+    
+    -- Public methods
+    function SecondaryWindow:SetTitle(Title)
+        WindowLabel.Text = Title;
+    end;
+    
+    function SecondaryWindow:Show()
+        Outer.Visible = true;
+        SecondaryWindow.Visible = true;
+    end;
+    
+    function SecondaryWindow:Hide()
+        Outer.Visible = false;
+        SecondaryWindow.Visible = false;
+    end;
+    
+    function SecondaryWindow:Toggle()
+        if SecondaryWindow.Visible then
+            SecondaryWindow:Hide();
+        else
+            SecondaryWindow:Show();
+        end;
+    end;
+    
+    function SecondaryWindow:Minimize()
+        if not SecondaryWindow.Minimized then
+            ToggleMinimize();
+        end;
+    end;
+    
+    function SecondaryWindow:Restore()
+        if SecondaryWindow.Minimized then
+            ToggleMinimize();
+        end;
+    end;
+    
+    function SecondaryWindow:SetPosition(Position)
+        Outer.Position = Position;
+    end;
+    
+    function SecondaryWindow:SetSize(Size)
+        OriginalSize = Size;
+        if not SecondaryWindow.Minimized then
+            Outer.Size = Size;
+        end;
+    end;
+    
+    function SecondaryWindow:GetContainer()
+        return Container;
+    end;
+    
+    -- Add keybind support for minimize
+    if Config.MinimizeKey and type(Config.MinimizeKey) == 'string' then
+        Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
+            if Input.UserInputType == Enum.UserInputType.Keyboard and Input.KeyCode.Name == Config.MinimizeKey then
+                ToggleMinimize();
+            end;
+        end));
+    end;
+    
+    -- Store references
+    SecondaryWindow.Holder = Outer;
+    SecondaryWindow.Container = Container;
+    SecondaryWindow.ContentInner = ContentInner;
+    SecondaryWindow.ContentOuter = ContentOuter;
+    
+    return SecondaryWindow;
+end;
+
 local function OnPlayerChange()
     local PlayerList = GetPlayersString();
 

@@ -844,41 +844,215 @@ ThemeManager:ApplyTheme('Default')
 
 SaveManager:LoadAutoloadConfig()
 
--- Create ESP Preview Box using native LinoriaLib widget
-local ESPPreviewBox = Tabs.Visual:AddRightGroupbox('ESP Preview')
+-- ==================== SECONDARY WINDOW FOR ESP PREVIEW ====================
+local SecondaryWindow = Library:CreateSecondaryWindow({
+	Title = 'ESP Preview';
+	Position = UDim2.fromOffset(680, 50);  -- Position next to main window
+	Size = UDim2.fromOffset(280, 350);
+	Resizable = true;
+	MinSize = Vector2.new(250, 300);
+	MinimizeKey = 'End';  -- Press End to minimize/restore
+	AutoShow = true;
+})
 
--- Create ESP Preview using LinoriaLib's AddESPPreview method
-ESPPreviewFrame = ESPPreviewBox:AddESPPreview({
-	Height = 200;
-	PlayerName = game.Players.LocalPlayer.DisplayName or game.Players.LocalPlayer.Name;
-	DistanceText = '< Weapon >';
-	HealthText = '75';
-	Settings = {
-		ShowBox = ESPSettings.ShowBox;
-		ShowName = ESPSettings.ShowName;
-		ShowDistance = ESPSettings.ShowDistance;
-		ShowHealth = ESPSettings.ShowHealth;
-		BoxColor = ESPSettings.BoxColor;
-		NameColor = ESPSettings.NameColor;
-		HealthBarColor = ESPSettings.HealthBarColor;
-	};
-	OnUpdate = function(Settings)
-		-- Sync with global ESPSettings when preview updates
-		for k, v in pairs(Settings) do
-			ESPSettings[k] = v;
-		end;
-	end;
+-- Get container from secondary window
+local PreviewContainer = SecondaryWindow:GetContainer()
+
+-- Add ESP Preview to secondary window instead of main window
+ESPPreviewFrame = Library:Create('Frame', {
+	BackgroundTransparency = 1;
+	Size = UDim2.new(1, 0, 1, 0);
+	Parent = PreviewContainer;
+})
+
+-- Create preview widget inside secondary window container
+local ESPPreview = Library:Create('Frame', {
+	BackgroundColor3 = Library.BackgroundColor;
+	BorderColor3 = Library.OutlineColor;
+	BorderSizePixel = 1;
+	Size = UDim2.new(1, 0, 1, 0);
+	ZIndex = 5;
+	Parent = ESPPreviewFrame;
+})
+
+Library:AddToRegistry(ESPPreview, {
+	BackgroundColor3 = 'BackgroundColor';
+	BorderColor3 = 'OutlineColor';
+})
+
+-- Content frame
+local ContentFrame = Library:Create('Frame', {
+	BackgroundColor3 = Library.MainColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0, 4, 0, 4);
+	Size = UDim2.new(1, -8, 1, -8);
+	ZIndex = 6;
+	Parent = ESPPreview;
+})
+
+Library:AddToRegistry(ContentFrame, {
+	BackgroundColor3 = 'MainColor';
+})
+
+-- Player Box Preview (Outline style) - Center positioned
+local BoxTop = Library:Create('Frame', {
+	BackgroundTransparency = 1;
+	BorderColor3 = ESPSettings.BoxColor;
+	BorderSizePixel = 2;
+	Position = UDim2.new(0.5, -32, 0.5, -50);
+	Size = UDim2.new(0, 64, 0, 100);
+	ZIndex = 8;
+	Parent = ContentFrame;
+})
+
+-- Player Head Circle
+local HeadCircle = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(180, 180, 180);
+	BorderColor3 = ESPSettings.BoxColor;
+	BorderSizePixel = 1;
+	Position = UDim2.new(0.5, -8, 0, 6);
+	Size = UDim2.new(0, 16, 0, 16);
+	ZIndex = 9;
+	Parent = BoxTop;
+})
+
+Library:Create('UICorner', {
+	CornerRadius = UDim.new(1, 0);
+	Parent = HeadCircle;
+})
+
+-- Player Body Rectangle
+local BodyRect = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(150, 150, 150);
+	BorderColor3 = ESPSettings.BoxColor;
+	BorderSizePixel = 1;
+	Position = UDim2.new(0.5, -10, 0, 26);
+	Size = UDim2.new(0, 20, 0, 36);
+	ZIndex = 9;
+	Parent = BoxTop;
+})
+
+-- Player Legs
+local LeftLeg = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(120, 120, 120);
+	BorderColor3 = ESPSettings.BoxColor;
+	BorderSizePixel = 1;
+	Position = UDim2.new(0.5, -10, 0, 64);
+	Size = UDim2.new(0, 8, 0, 32);
+	ZIndex = 9;
+	Parent = BoxTop;
+})
+
+local RightLeg = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(120, 120, 120);
+	BorderColor3 = ESPSettings.BoxColor;
+	BorderSizePixel = 1;
+	Position = UDim2.new(0.5, 2, 0, 64);
+	Size = UDim2.new(0, 8, 0, 32);
+	ZIndex = 9;
+	Parent = BoxTop;
+})
+
+-- Player Name Label (above box)
+local playerName = game.Players.LocalPlayer.DisplayName or game.Players.LocalPlayer.Name
+local NameLabel = Library:CreateLabel({
+	Position = UDim2.new(0.5, -60, 0, 12);
+	Size = UDim2.new(0, 120, 0, 16);
+	Text = playerName;
+	TextSize = 12;
+	TextColor3 = ESPSettings.NameColor;
+	ZIndex = 10;
+	Parent = ContentFrame;
+})
+
+-- Distance Label (below box)
+local DistanceLabel = Library:CreateLabel({
+	Position = UDim2.new(0.5, -50, 1, -23);
+	Size = UDim2.new(0, 100, 0, 15);
+	Text = '< Weapon >';
+	TextSize = 10;
+	TextColor3 = Color3.fromRGB(180, 180, 180);
+	ZIndex = 10;
+	Parent = ContentFrame;
+})
+
+-- Health Bar Background (Left side of box)
+local HealthBarBG = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(30, 30, 30);
+	BorderColor3 = Color3.fromRGB(0, 0, 0);
+	BorderSizePixel = 1;
+	Position = UDim2.new(0.5, -40, 0.5, -50);
+	Size = UDim2.new(0, 4, 0, 100);
+	ZIndex = 8;
+	Parent = ContentFrame;
+})
+
+-- Health Bar Fill
+local HealthBar = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.HealthBarColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0, 0, 0.25, 0);
+	Size = UDim2.new(1, 0, 0.75, 0);
+	ZIndex = 9;
+	Parent = HealthBarBG;
+})
+
+-- Health Text
+local HealthText = Library:CreateLabel({
+	Position = UDim2.new(0, -22, 0.25, -2);
+	Size = UDim2.new(0, 18, 0, 12);
+	Text = '75';
+	TextSize = 9;
+	TextXAlignment = Enum.TextXAlignment.Right;
+	ZIndex = 10;
+	Parent = HealthBarBG;
+})
+
+-- Store references in global table
+ESPPreviewFrame = {
+	Window = SecondaryWindow;
+	Main = ESPPreview;
+	BoxTop = BoxTop;
+	HeadCircle = HeadCircle;
+	BodyRect = BodyRect;
+	LeftLeg = LeftLeg;
+	RightLeg = RightLeg;
+	NameLabel = NameLabel;
+	DistanceLabel = DistanceLabel;
+	HealthBar = HealthBar;
+	HealthBarBG = HealthBarBG;
+	HealthText = HealthText;
+	ContentFrame = ContentFrame;
+}
+
+-- Add control in main window
+local ESPPreviewBox = Tabs.Visual:AddRightGroupbox('ESP Preview Window')
+
+ESPPreviewBox:AddButton({
+	Text = 'Show Preview Window',
+	Tooltip = 'Open the ESP Preview window',
+	Func = function()
+		SecondaryWindow:Show()
+	end
+}):AddButton({
+	Text = 'Hide Preview Window',
+	Tooltip = 'Close the ESP Preview window',
+	Func = function()
+		SecondaryWindow:Hide()
+	end
 })
 
 ESPPreviewBox:AddDivider()
 
-ESPPreviewBox:AddToggle('ShowESPPreview', {
-	Text = 'Show Preview',
+ESPPreviewBox:AddToggle('AutoShowPreview', {
+	Text = 'Auto Show on Start',
 	Default = true,
-	Tooltip = 'Toggle ESP preview visibility',
+	Tooltip = 'Automatically show preview window when UI loads',
 	Callback = function(Value)
-		if ESPPreviewFrame then
-			ESPPreviewFrame:SetVisible(Value)
-		end
+		-- Save preference
 	end
 })
+
+ESPPreviewBox:AddDivider()
+
+ESPPreviewBox:AddLabel('Press [End] to minimize/restore', true)
