@@ -457,7 +457,7 @@ do
 
     function Funcs:AddColorPicker(Idx, Info)
         local ToggleLabel = self.TextLabel;
-        local Container = self.Container;
+        -- local Container = self.Container;
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
 
@@ -479,28 +479,14 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
-        local IsToggle = self.Type == 'Toggle' or (Container and ToggleLabel.Parent ~= Container)
-        local DisplayParent = ToggleLabel
-
-        if IsToggle then
-            DisplayParent = self.ToggleRegion or ToggleLabel.Parent
-        end
-
         local DisplayFrame = Library:Create('Frame', {
             BackgroundColor3 = ColorPicker.Value;
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
-            Active = true;
             Size = UDim2.new(0, 28, 0, 14);
-            LayoutOrder = IsToggle and 0 or 999;
-            ZIndex = IsToggle and 9 or 6;
-            Parent = DisplayParent;
+            ZIndex = 6;
+            Parent = ToggleLabel;
         });
-
-        if IsToggle then
-            DisplayFrame.AnchorPoint = Vector2.new(1, 0.5)
-            DisplayFrame.Position = UDim2.new(1, -4, 0.5, 0)
-        end
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
         local CheckerFrame = Library:Create('ImageLabel', {
@@ -1916,19 +1902,13 @@ do
         });
 
         local ToggleLabel = Library:CreateLabel({
-            Size = UDim2.new(1, -4, 1, 0);
-            Position = UDim2.new(0, 0, 0, 0);
+            Size = UDim2.new(0, 216, 1, 0);
+            Position = UDim2.new(1, 6, 0, 0);
             TextSize = 14;
             Text = Info.Text;
             TextXAlignment = Enum.TextXAlignment.Left;
             ZIndex = 6;
             Parent = ToggleInner;
-        });
-
-        Library:Create('UIPadding', {
-            PaddingLeft = UDim.new(0, 18);
-            PaddingRight = UDim.new(0, 0);
-            Parent = ToggleLabel;
         });
 
         Library:Create('UIListLayout', {
@@ -1945,20 +1925,6 @@ do
             ZIndex = 8;
             Parent = ToggleOuter;
         });
-
-        local function UpdateToggleRegionSize()
-            local containerWidth = Container.AbsoluteSize.X
-            if containerWidth <= 0 then
-                containerWidth = 170
-            end
-
-            ToggleRegion.Size = UDim2.new(0, containerWidth, 1, 0)
-        end
-
-        UpdateToggleRegionSize()
-        Library:GiveSignal(Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleRegionSize))
-
-        Toggle.ToggleRegion = ToggleRegion;
 
         Library:OnHighlight(ToggleRegion, ToggleOuter,
             { BorderColor3 = 'AccentColor' },
