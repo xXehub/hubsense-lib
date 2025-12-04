@@ -896,6 +896,30 @@ local SecondaryWindow = Library:CreateSecondaryWindow({
 	AutoShow = true;
 })
 
+-- WAIT FOR RENDER then fix position using AbsolutePosition
+task.wait(0.1)
+local mainAbsPos = Window.Holder.AbsolutePosition
+local mainAbsSize = Window.Holder.AbsoluteSize
+-- Position right next to main window (1px gap)
+SecondaryWindow.Holder.Position = UDim2.fromOffset(mainAbsPos.X + mainAbsSize.X - 1, mainAbsPos.Y)
+
+-- DEBUG: Print actual positions
+print('[DEBUG] Main AbsolutePosition:', mainAbsPos)
+print('[DEBUG] Main AbsoluteSize:', mainAbsSize)
+print('[DEBUG] Secondary NEW Position:', SecondaryWindow.Holder.Position)
+
+-- OVERRIDE position tracking to use AbsolutePosition (fix sticky mode)
+local function UpdateSecondaryPosition()
+	if not SecondaryWindow or not SecondaryWindow.Holder or not SecondaryWindow.Holder.Parent then return end
+	local currentMainPos = Window.Holder.AbsolutePosition
+	local currentMainSize = Window.Holder.AbsoluteSize
+	SecondaryWindow.Holder.Position = UDim2.fromOffset(currentMainPos.X + currentMainSize.X - 1, currentMainPos.Y)
+end
+
+-- Connect to main window position changes
+Window.Holder:GetPropertyChangedSignal('AbsolutePosition'):Connect(UpdateSecondaryPosition)
+Window.Holder:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateSecondaryPosition)
+
 -- Get container from secondary window
 local PreviewContainer = SecondaryWindow:GetContainer()
 
