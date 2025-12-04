@@ -4,8 +4,8 @@
 local repo = 'https://raw.githubusercontent.com/xXehub/hubsense-lib/refs/heads/main/ondevs/'
 
 local Library = loadstring(game:HttpGet(repo .. 'LinoriaLib.lua'))()
-local ThemeManager = loadstring(readfile('ThemeManager.lua'))()
-local SaveManager = loadstring(readfile('SaveManager.lua'))()
+local ThemeManager = loadstring(game:HttpGet(repo .. 'ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(repo .. 'SaveManager.lua'))()
 
 -- Word Suggester Variables
 local url = "https://raw.githubusercontent.com/dwyl/english-words/refs/heads/master/words.txt"
