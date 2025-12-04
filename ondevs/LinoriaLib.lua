@@ -4151,9 +4151,10 @@ function Library:CreateSecondaryWindow(Config)
         local ParentHolder = ParentWindow.Holder;
         if ParentHolder then
             -- Position to the right of parent window
+            -- For seamless alignment, we overlap by 2px (border width)
             InitialPosition = UDim2.new(
                 ParentHolder.Position.X.Scale,
-                ParentHolder.Position.X.Offset + ParentHolder.Size.X.Offset + OffsetFromParent.X,
+                ParentHolder.Position.X.Offset + ParentHolder.Size.X.Offset - 2 + OffsetFromParent.X,
                 ParentHolder.Position.Y.Scale,
                 ParentHolder.Position.Y.Offset + OffsetFromParent.Y
             );
@@ -4378,9 +4379,10 @@ function Library:CreateSecondaryWindow(Config)
             if not SecondaryWindow.Visible then return end;
             if not ParentHolder or not ParentHolder.Parent then return end;
             
+            -- For seamless alignment, overlap by 2px (border width)
             Outer.Position = UDim2.new(
                 ParentHolder.Position.X.Scale,
-                ParentHolder.Position.X.Offset + ParentHolder.Size.X.Offset + OffsetFromParent.X,
+                ParentHolder.Position.X.Offset + ParentHolder.Size.X.Offset - 2 + OffsetFromParent.X,
                 ParentHolder.Position.Y.Scale,
                 ParentHolder.Position.Y.Offset + OffsetFromParent.Y
             );
