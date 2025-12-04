@@ -457,7 +457,7 @@ do
 
     function Funcs:AddColorPicker(Idx, Info)
         local ToggleLabel = self.TextLabel;
-        -- local Container = self.Container;
+        local Container = self.Container;
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
 
@@ -479,15 +479,28 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
+        local IsToggle = self.Type == 'Toggle' or (Container and ToggleLabel.Parent ~= Container)
+        local DisplayParent = ToggleLabel
+
+        if IsToggle then
+            DisplayParent = self.ToggleRegion or ToggleLabel.Parent
+        end
+
         local DisplayFrame = Library:Create('Frame', {
             BackgroundColor3 = ColorPicker.Value;
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
+            Active = true;
             Size = UDim2.new(0, 28, 0, 14);
-            LayoutOrder = 999; -- keep order for label-only cases
-            ZIndex = 6;
-            Parent = ToggleLabel;
+            LayoutOrder = IsToggle and 0 or 999;
+            ZIndex = IsToggle and 9 or 6;
+            Parent = DisplayParent;
         });
+
+        if IsToggle then
+            DisplayFrame.AnchorPoint = Vector2.new(1, 0.5)
+            DisplayFrame.Position = UDim2.new(1, -4, 0.5, 0)
+        end
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
         local CheckerFrame = Library:Create('ImageLabel', {
@@ -1914,7 +1927,7 @@ do
 
         Library:Create('UIPadding', {
             PaddingLeft = UDim.new(0, 18);
-            PaddingRight = UDim.new(0, 4);
+            PaddingRight = UDim.new(0, 0);
             Parent = ToggleLabel;
         });
 
@@ -1932,6 +1945,8 @@ do
             ZIndex = 8;
             Parent = ToggleOuter;
         });
+
+        Toggle.ToggleRegion = ToggleRegion;
 
         Library:OnHighlight(ToggleRegion, ToggleOuter,
             { BorderColor3 = 'AccentColor' },
