@@ -187,6 +187,7 @@ local CameraDistance = 4
 local MinZoom = 2
 local MaxZoom = 10
 local ViewportCamera = nil
+local PartMap = {} -- Global part mapping for rotation
 
 local function UpdateCameraZoom(distance)
 	CameraDistance = math.clamp(distance, MinZoom, MaxZoom)
@@ -198,6 +199,7 @@ end
 
 local function RotateCharacter(angleDegrees)
 	if not CharacterModel or not CharacterModel.PrimaryPart then return end
+	if not PartMap or not next(PartMap) then return end
 	
 	local char = game.Players.LocalPlayer.Character
 	if not char then return end
@@ -208,29 +210,15 @@ local function RotateCharacter(angleDegrees)
 	CurrentRotation = angleDegrees % 360
 	local targetCFrame = CFrame.new(0, 0, 0) * CFrame.Angles(0, math.rad(CurrentRotation), 0)
 	
-	-- Rotate all parts maintaining their relative positions
-	for _, part in pairs(CharacterModel:GetDescendants()) do
-		if part:IsA('BasePart') then
-			-- Find matching part in original character
-			local originalPart = char:FindFirstChild(part.Name)
-			
-			-- Check accessories if not found
-			if not originalPart or not originalPart:IsA('BasePart') then
-				for _, acc in pairs(char:GetChildren()) do
-					if acc:IsA('Accessory') then
-						local handle = acc:FindFirstChild('Handle')
-						if handle and handle.Name == part.Name then
-							originalPart = handle
-							break
-						end
-					end
+	-- Rotate all parts using stored PartMap
+	for originalPart, clonedPart in pairs(PartMap) do
+		if clonedPart and clonedPart.Parent and originalPart and originalPart.Parent then
+			pcall(function()
+				if clonedPart:IsA('BasePart') and originalPart:IsA('BasePart') then
+					local offset = originalHRP.CFrame:ToObjectSpace(originalPart.CFrame)
+					clonedPart.CFrame = targetCFrame:ToWorldSpace(offset)
 				end
-			end
-			
-			if originalPart and originalPart:IsA('BasePart') then
-				local offset = originalHRP.CFrame:ToObjectSpace(originalPart.CFrame)
-				part.CFrame = targetCFrame:ToWorldSpace(offset)
-			end
+			end)
 		end
 	end
 end
@@ -1235,6 +1223,7 @@ local function UpdatePlayerAvatar()
 		
 		local partsCloned = 0
 		local hrpClone = nil
+		PartMap = {} -- Reset and store globally
 		
 		-- First pass: Clone all BaseParts (body parts)
 		for _, part in pairs(char:GetChildren()) do
@@ -1254,6 +1243,8 @@ local function UpdatePlayerAvatar()
 					p.CFrame = part.CFrame
 					p.Parent = charModel
 					
+					PartMap[part] = p -- Store globally
+					
 					if p.Name == 'HumanoidRootPart' then
 						hrpClone = p
 					end
@@ -1262,11 +1253,16 @@ local function UpdatePlayerAvatar()
 			end
 		end
 		
-		-- Second pass: Clone Accessories
+		-- Second pass: Clone Accessories with proper attachment positioning
 		for _, acc in pairs(char:GetChildren()) do
 			if acc:IsA('Accessory') then
 				pcall(function()
+					local originalHandle = acc:FindFirstChild('Handle')
+					if not originalHandle then return end
+					
+					-- Clone the accessory
 					local a = acc:Clone()
+					
 					-- Remove scripts
 					for _, obj in pairs(a:GetDescendants()) do
 						if obj:IsA('Script') or obj:IsA('LocalScript') or obj:IsA('ModuleScript') then
@@ -1279,10 +1275,44 @@ local function UpdatePlayerAvatar()
 						handle.Anchored = true
 						handle.CanCollide = false
 						
-						local originalHandle = acc:FindFirstChild('Handle')
-						if originalHandle then
+						-- Use Weld/Attachment data to position correctly
+						local originalWeld = originalHandle:FindFirstChildOfClass('Weld')
+						local originalAttachment = originalHandle:FindFirstChildOfClass('Attachment')
+						
+						if originalWeld and originalWeld.Part0 and originalWeld.Part1 then
+							-- Find corresponding cloned part
+							local attachedPart = originalWeld.Part0 == originalHandle and originalWeld.Part1 or originalWeld.Part0
+							local clonedAttachedPart = PartMap[attachedPart]
+							
+							if clonedAttachedPart then
+								-- Calculate proper CFrame based on weld offset
+								local offset = originalWeld.C0
+								handle.CFrame = clonedAttachedPart.CFrame * offset
+							else
+								-- Fallback to original CFrame
+								handle.CFrame = originalHandle.CFrame
+							end
+						elseif originalAttachment then
+							-- Use attachment system
+							local attachmentName = originalAttachment.Name
+							
+							-- Find matching attachment in body parts
+							for originalPart, clonedPart in pairs(PartMap) do
+								local bodyAttachment = originalPart:FindFirstChild(attachmentName)
+								if bodyAttachment and bodyAttachment:IsA('Attachment') then
+									-- Position handle based on attachment
+									local handleOffset = originalHandle.CFrame:ToObjectSpace(originalHandle.CFrame)
+									local bodyOffset = bodyAttachment.WorldCFrame
+									handle.CFrame = clonedPart.CFrame * bodyAttachment.CFrame
+									break
+								end
+							end
+						else
+							-- No attachment found, use direct CFrame
 							handle.CFrame = originalHandle.CFrame
 						end
+						
+						PartMap[originalHandle] = handle
 					end
 					
 					a.Parent = charModel
@@ -1317,15 +1347,15 @@ local function UpdatePlayerAvatar()
 			charModel.PrimaryPart = hrpClone
 			CharacterModel = charModel
 			
-			-- Move entire model to origin
+			-- Move entire model to origin with current rotation
 			local originalHRPPos = hrp.CFrame
 			local targetCFrame = CFrame.new(0, 0, 0) * CFrame.Angles(0, math.rad(CurrentRotation), 0)
 			
-			-- Position all parts relative to new HRP position
-			for _, part in pairs(charModel:GetDescendants()) do
-				if part:IsA('BasePart') then
-					local offset = originalHRPPos:ToObjectSpace(part.CFrame)
-					part.CFrame = targetCFrame:ToWorldSpace(offset)
+			-- Position all parts relative to new HRP position (maintaining relative positions)
+			for originalPart, clonedPart in pairs(PartMap) do
+				if clonedPart and clonedPart:IsA('BasePart') and originalPart:IsA('BasePart') then
+					local offset = originalHRPPos:ToObjectSpace(originalPart.CFrame)
+					clonedPart.CFrame = targetCFrame:ToWorldSpace(offset)
 				end
 			end
 			
@@ -1335,6 +1365,10 @@ local function UpdatePlayerAvatar()
 			ViewportCamera.FieldOfView = 40
 			
 			print('[ESP Preview] Avatar rendered! Parts:', #charModel:GetDescendants())
+			
+			-- Update ESP preview overlays
+			task.wait(0.1)
+			UpdateESPPreview()
 		else
 			warn('[ESP Preview] HumanoidRootPart not found in clone')
 		end
