@@ -1920,6 +1920,12 @@ do
             Parent = ToggleLabel;
         });
 
+        Library:Create('UIPadding', {
+            PaddingLeft = UDim.new(0, 0);
+            PaddingRight = UDim.new(0, 4);
+            Parent = ToggleLabel;
+        });
+
         local ToggleRegion = Library:Create('Frame', {
             BackgroundTransparency = 1;
             Size = UDim2.new(0, 170, 1, 0);
