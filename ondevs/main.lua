@@ -889,7 +889,7 @@ local SecondaryWindow = Library:CreateSecondaryWindow({
 	Title = 'ESP Preview';
 	ParentWindow = Window;  -- Attach to main window
 	StickyMode = true;  -- Follow parent window (NOT draggable!)
-	OffsetFromParent = Vector2.new(10, 0);  -- 10px gap to the right
+	OffsetFromParent = Vector2.new(2, 0);  -- 2px gap to the right - very close!
 	Size = UDim2.fromOffset(280, 350);
 	Resizable = false;  -- Disabled when sticky
 	MinimizeKey = 'End';  -- Press End to minimize/restore
@@ -1096,5 +1096,7 @@ ESPPreviewBox:AddToggle('AutoShowPreview', {
 
 ESPPreviewBox:AddDivider()
 
-ESPPreviewBox:AddLabel('📌 Sticky to main window', true)
-ESPPreviewBox:AddLabel('Press [End] to minimize/restore', true)
+ESPPreviewBox:AddLabel('📌 Sticky Mode: ON', true)
+ESPPreviewBox:AddLabel('• Not draggable independently', true)
+ESPPreviewBox:AddLabel('• Follows main window', true)
+ESPPreviewBox:AddLabel('• Press [End] to minimize', true)

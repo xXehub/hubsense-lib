@@ -4130,8 +4130,13 @@ function Library:CreateSecondaryWindow(Config)
     
     -- Sticky mode: follows parent window
     local ParentWindow = Config.ParentWindow;
-    local OffsetFromParent = Config.OffsetFromParent or Vector2.new(10, 0); -- Default: 10px to the right
+    local OffsetFromParent = Config.OffsetFromParent or Vector2.new(2, 0); -- Default: 2px gap (very close!)
     local StickyMode = Config.StickyMode ~= false; -- Default: true
+    
+    -- Debug: Print offset value
+    if Config.OffsetFromParent then
+        print('[SecondaryWindow] Custom Offset:', Config.OffsetFromParent.X, Config.OffsetFromParent.Y)
+    end
     
     local SecondaryWindow = {
         Visible = true;
