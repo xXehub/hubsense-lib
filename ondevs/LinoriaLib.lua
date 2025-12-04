@@ -479,11 +479,22 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
-        -- Find the actual row container (for toggle it's ToggleOuter, for label it's the TextLabel itself)
-        local RowContainer = ToggleLabel.Parent
-        if RowContainer.ClassName == 'Frame' and RowContainer.Parent == Container then
-            -- This is a Toggle (ToggleInner -> ToggleOuter -> Container)
-            RowContainer = RowContainer.Parent
+        -- Determine if this is from a Toggle (has ToggleOuter wrapper) or a Label (directly in Container)
+        local ParentForColorPicker = ToggleLabel.Parent -- Default: ToggleInner
+        local IsToggle = false
+        
+        if ParentForColorPicker.ClassName == 'Frame' and ParentForColorPicker.Parent then
+            local GrandParent = ParentForColorPicker.Parent
+            if GrandParent.ClassName == 'Frame' and GrandParent.Parent == Container then
+                -- This is a Toggle: ToggleLabel -> ToggleInner -> ToggleOuter -> Container
+                ParentForColorPicker = GrandParent -- Use ToggleOuter
+                IsToggle = true
+            end
+        end
+        
+        -- If not a toggle, it's a Label: ToggleLabel -> Container (TextLabel directly in Container)
+        if not IsToggle then
+            ParentForColorPicker = ToggleLabel -- Keep it in the label for UIListLayout to work
         end
 
         local DisplayFrame = Library:Create('Frame', {
@@ -491,10 +502,10 @@ do
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
             Size = UDim2.new(0, 28, 0, 14);
-            Position = UDim2.new(1, -4, 0.5, -7);
-            AnchorPoint = Vector2.new(1, 0.5);
+            Position = IsToggle and UDim2.new(1, -4, 0.5, -7) or nil;
+            AnchorPoint = IsToggle and Vector2.new(1, 0.5) or nil;
             ZIndex = 6;
-            Parent = RowContainer;
+            Parent = ParentForColorPicker;
         });
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
