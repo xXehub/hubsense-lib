@@ -1903,8 +1903,8 @@ do
         });
 
         local ToggleLabel = Library:CreateLabel({
-            Size = UDim2.new(1, -4, 1, 0);
-            Position = UDim2.new(1, 6, 0, 0);
+            Size = UDim2.new(1, -24, 1, 0); -- fill row, leave space for right padding
+            Position = UDim2.new(0, 20, 0, 0); -- offset right of checkbox
             TextSize = 14;
             Text = Info.Text;
             TextXAlignment = Enum.TextXAlignment.Left;
