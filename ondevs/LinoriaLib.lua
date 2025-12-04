@@ -1903,7 +1903,7 @@ do
         });
 
         local ToggleLabel = Library:CreateLabel({
-            Size = UDim2.new(0, 216, 1, 0);
+            Size = UDim2.new(1, -24, 1, 0);
             Position = UDim2.new(0, 20, 0, 0);
             TextSize = 14;
             Text = Info.Text;
@@ -1912,25 +1912,11 @@ do
             Parent = ToggleInner;
         });
 
-        local function UpdateLabelWidth()
-            local width = math.max(0, Container.AbsoluteSize.X - 32);
-            ToggleLabel.Size = UDim2.new(0, width, 1, 0);
-        end
-
-        UpdateLabelWidth()
-        Library:GiveSignal(Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateLabelWidth))
-
         Library:Create('UIListLayout', {
             Padding = UDim.new(0, 4);
             FillDirection = Enum.FillDirection.Horizontal;
             HorizontalAlignment = Enum.HorizontalAlignment.Right;
             SortOrder = Enum.SortOrder.LayoutOrder;
-            Parent = ToggleLabel;
-        });
-
-        Library:Create('UIPadding', {
-            PaddingLeft = UDim.new(0, 0);
-            PaddingRight = UDim.new(0, 4);
             Parent = ToggleLabel;
         });
 
