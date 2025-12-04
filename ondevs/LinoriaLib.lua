@@ -1475,7 +1475,7 @@ do
             local Outer = Library:Create('Frame', {
                 BackgroundColor3 = Color3.new(0, 0, 0);
                 BorderColor3 = Color3.new(0, 0, 0);
-                Size = UDim2.new(1, -4, 0, 20);
+                Size = UDim2.new(1, 0, 0, 20);
                 ZIndex = 5;
             });
 
@@ -3344,7 +3344,7 @@ function Library:CreateWindow(...)
             BackgroundTransparency = 1;
             BorderSizePixel = 0;
             Position = UDim2.new(0, 8 - 1, 0, 8 - 1);
-            Size = UDim2.new(0.5, -12 + 2, 0, 507 + 2);
+            Size = UDim2.new(0.5, -12 + 2, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
             BottomImage = '';
             TopImage = '';
@@ -3357,7 +3357,7 @@ function Library:CreateWindow(...)
             BackgroundTransparency = 1;
             BorderSizePixel = 0;
             Position = UDim2.new(0.5, 4 + 1, 0, 8 - 1);
-            Size = UDim2.new(0.5, -12 + 2, 0, 507 + 2);
+            Size = UDim2.new(0.5, -12 + 2, 1, -16);
             CanvasSize = UDim2.new(0, 0, 0, 0);
             BottomImage = '';
             TopImage = '';
@@ -3418,7 +3418,7 @@ function Library:CreateWindow(...)
                 BackgroundColor3 = Library.BackgroundColor;
                 BorderColor3 = Library.OutlineColor;
                 BorderMode = Enum.BorderMode.Inset;
-                Size = UDim2.new(1, 0, 0, 507 + 2);
+                Size = UDim2.new(1, 0, 0, 0);
                 ZIndex = 2;
                 Parent = Info.Side == 1 and LeftSide or RightSide;
             });
