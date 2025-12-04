@@ -1946,6 +1946,18 @@ do
             Parent = ToggleOuter;
         });
 
+        local function UpdateToggleRegionSize()
+            local containerWidth = Container.AbsoluteSize.X
+            if containerWidth <= 0 then
+                containerWidth = 170
+            end
+
+            ToggleRegion.Size = UDim2.new(0, containerWidth, 1, 0)
+        end
+
+        UpdateToggleRegionSize()
+        Library:GiveSignal(Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleRegionSize))
+
         Toggle.ToggleRegion = ToggleRegion;
 
         Library:OnHighlight(ToggleRegion, ToggleOuter,
