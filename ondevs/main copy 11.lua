@@ -1866,68 +1866,57 @@ local function UpdatePlayerAvatar()
 			spawn(function()
 				task.wait(0.3)
 				if ESPPreviewFrame then
-					print('[ESP Preview] ===== FORCE SHOWING ALL ESP (IGNORE SETTINGS FOR NOW) =====')
+					print('[ESP Preview] ===== FORCE APPLYING ALL ESP ELEMENTS =====')
 					
-					-- FORCE Box ESP VISIBLE
+					-- Force show Box ESP - IGNORE ShowSelf for testing
 					if ESPPreviewFrame.BoxOutline then
-						ESPPreviewFrame.BoxOutline.Visible = true
-						ESPPreviewFrame.BoxOutline.BorderColor3 = ESPSettings.BoxColor
-						print('[ESP Preview] BoxOutline FORCED VISIBLE')
-						print('[ESP Preview] BoxOutline.BorderSizePixel:', ESPPreviewFrame.BoxOutline.BorderSizePixel)
+						ESPPreviewFrame.BoxOutline.Visible = true  -- ALWAYS TRUE
+						ESPPreviewFrame.BoxOutline.BackgroundTransparency = 0.5
+						ESPPreviewFrame.BoxOutline.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+						print('[ESP Preview] FORCE BoxOutline.Visible = TRUE (ALWAYS)')
+						print('[ESP Preview] BoxOutline.AbsolutePosition:', ESPPreviewFrame.BoxOutline.AbsolutePosition)
 						print('[ESP Preview] BoxOutline.AbsoluteSize:', ESPPreviewFrame.BoxOutline.AbsoluteSize)
+					else
+						print('[ESP Preview] ERROR: BoxOutline is NIL!')
 					end
 					
-					-- FORCE Skeleton VISIBLE
-					if ESPPreviewFrame.HeadCircle then
-						ESPPreviewFrame.HeadCircle.Visible = true
-						ESPPreviewFrame.HeadCircle.BorderColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.BodyRect then
-						ESPPreviewFrame.BodyRect.Visible = true
-						ESPPreviewFrame.BodyRect.BorderColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.LeftLeg then
-						ESPPreviewFrame.LeftLeg.Visible = true
-						ESPPreviewFrame.LeftLeg.BorderColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.RightLeg then
-						ESPPreviewFrame.RightLeg.Visible = true
-						ESPPreviewFrame.RightLeg.BorderColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.LeftArm then
-						ESPPreviewFrame.LeftArm.Visible = true
-						ESPPreviewFrame.LeftArm.BackgroundColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.RightArm then
-						ESPPreviewFrame.RightArm.Visible = true
-						ESPPreviewFrame.RightArm.BackgroundColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.Spine then
-						ESPPreviewFrame.Spine.Visible = true
-						ESPPreviewFrame.Spine.BackgroundColor3 = ESPSettings.SkeletonColor
-					end
-					print('[ESP Preview] Skeleton FORCED VISIBLE')
+					-- Force show Skeleton - ALWAYS TRUE
+					if ESPPreviewFrame.HeadCircle then ESPPreviewFrame.HeadCircle.Visible = true end
+					if ESPPreviewFrame.BodyRect then ESPPreviewFrame.BodyRect.Visible = true end
+					if ESPPreviewFrame.LeftLeg then ESPPreviewFrame.LeftLeg.Visible = true end
+					if ESPPreviewFrame.RightLeg then ESPPreviewFrame.RightLeg.Visible = true end
+					if ESPPreviewFrame.LeftArm then ESPPreviewFrame.LeftArm.Visible = true end
+					if ESPPreviewFrame.RightArm then ESPPreviewFrame.RightArm.Visible = true end
+					if ESPPreviewFrame.Spine then ESPPreviewFrame.Spine.Visible = true end
+					print('[ESP Preview] FORCE Skeleton.Visible = TRUE (ALL)')
 					
-					-- FORCE Name VISIBLE
+					-- Force show Name - ALWAYS TRUE
 					if ESPPreviewFrame.NameLabel then
 						ESPPreviewFrame.NameLabel.Visible = true
-						ESPPreviewFrame.NameLabel.TextColor3 = ESPSettings.NameColor
-						print('[ESP Preview] NameLabel FORCED VISIBLE')
+						print('[ESP Preview] FORCE NameLabel.Visible = TRUE')
+						print('[ESP Preview] NameLabel.Text:', ESPPreviewFrame.NameLabel.Text)
+						print('[ESP Preview] NameLabel.AbsolutePosition:', ESPPreviewFrame.NameLabel.AbsolutePosition)
 					end
 					
-					-- FORCE Distance VISIBLE
+					-- Force show Distance - ALWAYS TRUE
 					if ESPPreviewFrame.DistanceLabel then
 						ESPPreviewFrame.DistanceLabel.Visible = true
-						print('[ESP Preview] DistanceLabel FORCED VISIBLE')
+						print('[ESP Preview] FORCE DistanceLabel.Visible = TRUE')
 					end
 					
-					-- FORCE Health Bar VISIBLE
+					-- Force show Health Bar - ALWAYS TRUE
 					if ESPPreviewFrame.HealthBarBG then
 						ESPPreviewFrame.HealthBarBG.Visible = true
-						print('[ESP Preview] HealthBarBG FORCED VISIBLE')
+						print('[ESP Preview] FORCE HealthBarBG.Visible = TRUE')
 					end
 					
 					print('[ESP Preview] ===== ALL ESP FORCED TO VISIBLE =====')
+					if ESPPreviewFrame.HealthBarBG then
+						ESPPreviewFrame.HealthBarBG.Visible = ESPSettings.ShowHealth
+						print('[ESP Preview] FORCE HealthBarBG.Visible =', ESPPreviewFrame.HealthBarBG.Visible)
+					end
+					
+					print('[ESP Preview] Force apply completed!')
 				end
 			end)
 		else
@@ -2047,30 +2036,54 @@ end)
 
 -- Box ESP Outline (2D Box around player) - IN OVERLAY CONTAINER
 local BoxOutline = Library:Create('Frame', {
-	BackgroundColor3 = Color3.fromRGB(255, 0, 0);  -- SOLID RED background
-	BackgroundTransparency = 0.7;  -- Semi-transparent to see avatar
-	BorderColor3 = Color3.fromRGB(255, 255, 255);  -- White border
-	BorderSizePixel = 2;
-	Position = UDim2.new(0.5, -50, 0.5, -75);  -- Fit avatar better
-	Size = UDim2.new(0, 100, 0, 150);  -- Taller for full avatar
-	ZIndex = 21;
-	Visible = true;  -- START VISIBLE
-	Parent = ESPOverlay;
+	BackgroundColor3 = Color3.fromRGB(255, 0, 0);  -- SOLID RED for testing
+	BackgroundTransparency = 0.5;  -- Semi-transparent so we can see avatar
+	BorderColor3 = Color3.fromRGB(0, 255, 0);  -- GREEN border for contrast
+	BorderSizePixel = 3;  -- Thick border
+	Position = UDim2.new(0.5, -40, 0.5, -60);  -- Center in overlay
+	Size = UDim2.new(0, 80, 0, 120);
+	ZIndex = 21;  -- Higher than ESPOverlay
+	Visible = true;  -- FORCE VISIBLE FOR TESTING
+	Parent = ESPOverlay;  -- Parent to overlay container
 })
 
 print('[ESP Preview] ===== BOX OUTLINE CREATED =====')
-print('[ESP Preview] BoxOutline should be RED BOX with WHITE border')
+print('[ESP Preview] BoxOutline should be SOLID RED with GREEN border')
 print('[ESP Preview] BoxOutline.Visible:', BoxOutline.Visible)
+print('[ESP Preview] BoxOutline.Parent:', BoxOutline.Parent and BoxOutline.Parent.Name or 'nil')
 print('[ESP Preview] BoxOutline.BackgroundColor3:', BoxOutline.BackgroundColor3)
-print('[ESP Preview] BoxOutline.BackgroundTransparency:', BoxOutline.BackgroundTransparency)
+print('[ESP Preview] BoxOutline.BorderColor3:', BoxOutline.BorderColor3)
+print('[ESP Preview] BoxOutline.ZIndex:', BoxOutline.ZIndex)
+print('[ESP Preview] ESPOverlay exists:', ESPOverlay ~= nil)
+print('[ESP Preview] ESPOverlay.Parent:', ESPOverlay.Parent and ESPOverlay.Parent.Name or 'nil')
+
+print('[ESP Preview] BoxOutline created in ESPOverlay')
+
+-- DEBUG TEST BOX - ALWAYS VISIBLE untuk testing
+local TestBox = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(255, 0, 255);  -- Bright magenta
+	BackgroundTransparency = 0.3;
+	BorderColor3 = Color3.fromRGB(0, 255, 0);  -- Green border
+	BorderSizePixel = 3;
+	Position = UDim2.new(0.5, -50, 0.5, -50);
+	Size = UDim2.new(0, 100, 0, 100);
+	ZIndex = 50;  -- HIGHEST ZIndex
+	Visible = true;  -- ALWAYS VISIBLE
+	Parent = ESPOverlay;  -- IN OVERLAY
+})
+print('[ESP Preview] ===== TEST BOX CREATED =====')
+print('[ESP Preview] TestBox should be BRIGHT MAGENTA with GREEN border')
+print('[ESP Preview] TestBox.Visible:', TestBox.Visible)
+print('[ESP Preview] TestBox.Parent:', TestBox.Parent.Name)
+print('[ESP Preview] TestBox.ZIndex:', TestBox.ZIndex)
 
 -- Skeleton overlay container - IN OVERLAY
 local SkeletonContainer = Library:Create('Frame', {
 	BackgroundTransparency = 1;
-	Position = UDim2.new(0.5, -40, 0.5, -70);  -- Fit to avatar
-	Size = UDim2.new(0, 80, 0, 140);  -- Bigger for full skeleton
+	Position = UDim2.new(0.5, -32, 0.5, -50);
+	Size = UDim2.new(0, 64, 0, 100);
 	ZIndex = 22;
-	Parent = ESPOverlay;
+	Parent = ESPOverlay;  -- IN OVERLAY
 })
 
 print('[ESP Preview] SkeletonContainer created in ESPOverlay')

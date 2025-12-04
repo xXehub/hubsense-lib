@@ -32,15 +32,12 @@ local ESPSettings = {
 	ShowBox = true,
 	BoxESP = false,
 	SkeletonESP = false,
-	ShowSelf = true,  -- TRUE by default so preview works immediately
 	MaxDistance = 1000,
 	TeamCheck = false,
 	NameColor = Color3.fromRGB(255, 255, 255),
 	BoxColor = Color3.fromRGB(255, 0, 0),
 	HealthBarColor = Color3.fromRGB(0, 255, 0),
-	SkeletonColor = Color3.fromRGB(255, 255, 255),
-	DistanceColor = Color3.fromRGB(180, 180, 180),
-	TracerColor = Color3.fromRGB(255, 255, 255)
+	SkeletonColor = Color3.fromRGB(255, 255, 255)
 }
 
 -- Load Words Function
@@ -197,7 +194,6 @@ local function UpdateCameraZoom(distance)
 	if ViewportCamera then
 		ViewportCamera.CFrame = CFrame.new(0, 1, CameraDistance)
 		ViewportCamera.Focus = CFrame.new(0, 1, 0)
-		print('[ESP Preview] Zoom updated:', CameraDistance)
 	end
 end
 
@@ -229,60 +225,13 @@ end
 
 -- ==================== ESP PREVIEW UPDATE FUNCTION ====================
 local function UpdateESPPreview()
-	print('[ESP Preview] === UpdateESPPreview CALLED ===')
-	print('[ESP Preview] ESPPreviewFrame exists:', ESPPreviewFrame ~= nil)
+	if not ESPPreviewFrame then return end
 	
-	if not ESPPreviewFrame then
-		print('[ESP Preview] ERROR: ESPPreviewFrame is nil!')
-		return
-	end
-	
-	-- Check if ShowSelf is enabled
-	if not ESPSettings.ShowSelf then
-		print('[ESP Preview] ShowSelf is OFF - hiding all ESP elements')
-		-- Hide everything when ShowSelf is disabled
-		if ESPPreviewFrame.BoxOutline then ESPPreviewFrame.BoxOutline.Visible = false end
-		if ESPPreviewFrame.HeadCircle then ESPPreviewFrame.HeadCircle.Visible = false end
-		if ESPPreviewFrame.BodyRect then ESPPreviewFrame.BodyRect.Visible = false end
-		if ESPPreviewFrame.LeftLeg then ESPPreviewFrame.LeftLeg.Visible = false end
-		if ESPPreviewFrame.RightLeg then ESPPreviewFrame.RightLeg.Visible = false end
-		if ESPPreviewFrame.LeftArm then ESPPreviewFrame.LeftArm.Visible = false end
-		if ESPPreviewFrame.RightArm then ESPPreviewFrame.RightArm.Visible = false end
-		if ESPPreviewFrame.Spine then ESPPreviewFrame.Spine.Visible = false end
-		if ESPPreviewFrame.NameLabel then ESPPreviewFrame.NameLabel.Visible = false end
-		if ESPPreviewFrame.DistanceLabel then ESPPreviewFrame.DistanceLabel.Visible = false end
-		if ESPPreviewFrame.HealthBarBG then ESPPreviewFrame.HealthBarBG.Visible = false end
-		return
-	end
-	
-	print('[ESP Preview] ShowSelf is ON - updating ESP elements')
-	print('[ESP Preview] Updating ESP overlays...')
-	print('[ESP Preview] Settings - Box:', ESPSettings.BoxESP, 'Skeleton:', ESPSettings.SkeletonESP)
-	print('[ESP Preview] Settings - Name:', ESPSettings.ShowName, 'Distance:', ESPSettings.ShowDistance, 'Health:', ESPSettings.ShowHealth)
-	
-	-- Update Box ESP FIRST
-	print('[ESP Preview] Checking BoxOutline...')
-	if ESPPreviewFrame.BoxOutline then
-		print('[ESP Preview]   BoxOutline found! Setting visible to:', ESPSettings.BoxESP)
-		ESPPreviewFrame.BoxOutline.Visible = ESPSettings.BoxESP
-		if ESPSettings.BoxESP then
-			ESPPreviewFrame.BoxOutline.BorderColor3 = ESPSettings.BoxColor
-		end
-		print('[ESP Preview]   BoxOutline.Visible =', ESPPreviewFrame.BoxOutline.Visible)
-		print('[ESP Preview]   BoxOutline.Parent =', ESPPreviewFrame.BoxOutline.Parent and ESPPreviewFrame.BoxOutline.Parent.Name or 'nil')
-		print('[ESP Preview]   BoxOutline.ZIndex =', ESPPreviewFrame.BoxOutline.ZIndex)
-		print('[ESP Preview]   BoxOutline.Size =', ESPPreviewFrame.BoxOutline.Size)
-		print('[ESP Preview]   BoxOutline.Position =', ESPPreviewFrame.BoxOutline.Position)
-		print('[ESP Preview]   BoxOutline.AbsolutePosition =', ESPPreviewFrame.BoxOutline.AbsolutePosition)
-		print('[ESP Preview]   BoxOutline.AbsoluteSize =', ESPPreviewFrame.BoxOutline.AbsoluteSize)
-	else
-		print('[ESP Preview]   ERROR: BoxOutline is nil!')
-	end
-	
-	-- Update Skeleton visibility and colors
+	-- Update Skeleton visibility
 	local showSkeleton = ESPSettings.SkeletonESP
 	if ESPPreviewFrame.HeadCircle then
 		ESPPreviewFrame.HeadCircle.Visible = showSkeleton
+		ESPPreviewFrame.HeadCircle.ZIndex = 20
 		if showSkeleton then
 			ESPPreviewFrame.HeadCircle.BorderColor3 = ESPSettings.SkeletonColor
 		end
@@ -290,6 +239,7 @@ local function UpdateESPPreview()
 	
 	if ESPPreviewFrame.BodyRect then
 		ESPPreviewFrame.BodyRect.Visible = showSkeleton
+		ESPPreviewFrame.BodyRect.ZIndex = 20
 		if showSkeleton then
 			ESPPreviewFrame.BodyRect.BorderColor3 = ESPSettings.SkeletonColor
 		end
@@ -297,6 +247,7 @@ local function UpdateESPPreview()
 	
 	if ESPPreviewFrame.LeftLeg then
 		ESPPreviewFrame.LeftLeg.Visible = showSkeleton
+		ESPPreviewFrame.LeftLeg.ZIndex = 20
 		if showSkeleton then
 			ESPPreviewFrame.LeftLeg.BorderColor3 = ESPSettings.SkeletonColor
 		end
@@ -304,6 +255,7 @@ local function UpdateESPPreview()
 	
 	if ESPPreviewFrame.RightLeg then
 		ESPPreviewFrame.RightLeg.Visible = showSkeleton
+		ESPPreviewFrame.RightLeg.ZIndex = 20
 		if showSkeleton then
 			ESPPreviewFrame.RightLeg.BorderColor3 = ESPSettings.SkeletonColor
 		end
@@ -311,6 +263,7 @@ local function UpdateESPPreview()
 	
 	if ESPPreviewFrame.LeftArm then
 		ESPPreviewFrame.LeftArm.Visible = showSkeleton
+		ESPPreviewFrame.LeftArm.ZIndex = 20
 		if showSkeleton then
 			ESPPreviewFrame.LeftArm.BackgroundColor3 = ESPSettings.SkeletonColor
 		end
@@ -318,6 +271,7 @@ local function UpdateESPPreview()
 	
 	if ESPPreviewFrame.RightArm then
 		ESPPreviewFrame.RightArm.Visible = showSkeleton
+		ESPPreviewFrame.RightArm.ZIndex = 20
 		if showSkeleton then
 			ESPPreviewFrame.RightArm.BackgroundColor3 = ESPSettings.SkeletonColor
 		end
@@ -325,34 +279,30 @@ local function UpdateESPPreview()
 	
 	if ESPPreviewFrame.Spine then
 		ESPPreviewFrame.Spine.Visible = showSkeleton
+		ESPPreviewFrame.Spine.ZIndex = 20
 		if showSkeleton then
 			ESPPreviewFrame.Spine.BackgroundColor3 = ESPSettings.SkeletonColor
 		end
 	end
 	
-	-- Update Box ESP visibility and color
+	-- Update Box ESP visibility
 	if ESPPreviewFrame.BoxOutline then
 		ESPPreviewFrame.BoxOutline.Visible = ESPSettings.BoxESP
+		ESPPreviewFrame.BoxOutline.ZIndex = 20
 		if ESPSettings.BoxESP then
 			ESPPreviewFrame.BoxOutline.BorderColor3 = ESPSettings.BoxColor
 		end
-		print('[ESP Preview] BoxOutline visible:', ESPPreviewFrame.BoxOutline.Visible)
 	end
 	
 	-- Update Name
 	if ESPPreviewFrame.NameLabel then
 		ESPPreviewFrame.NameLabel.TextColor3 = ESPSettings.NameColor
 		ESPPreviewFrame.NameLabel.Visible = ESPSettings.ShowName
-		print('[ESP Preview] NameLabel visible:', ESPPreviewFrame.NameLabel.Visible)
 	end
 	
-	-- Update Distance with proper color
+	-- Update Distance
 	if ESPPreviewFrame.DistanceLabel then
 		ESPPreviewFrame.DistanceLabel.Visible = ESPSettings.ShowDistance
-		if ESPSettings.ShowDistance then
-			ESPPreviewFrame.DistanceLabel.TextColor3 = ESPSettings.DistanceColor or Color3.fromRGB(180, 180, 180)
-		end
-		print('[ESP Preview] DistanceLabel visible:', ESPPreviewFrame.DistanceLabel.Visible)
 	end
 	
 	-- Update Health Bar
@@ -363,48 +313,14 @@ local function UpdateESPPreview()
 	
 	if ESPPreviewFrame.HealthBarBG then
 		ESPPreviewFrame.HealthBarBG.Visible = ESPSettings.ShowHealth
-		print('[ESP Preview] HealthBarBG visible:', ESPPreviewFrame.HealthBarBG.Visible)
 	end
 	
 	if ESPPreviewFrame.HealthText then
 		ESPPreviewFrame.HealthText.Visible = ESPSettings.ShowHealth
 	end
-	
-	print('[ESP Preview] Update completed!')
 end
 
--- ==================== ESP FUNCTIONS (ADVANCED) ====================
--- Calculate 2D box position from 3D character
-local function CalculateBox(character)
-	local camera = workspace.CurrentCamera
-	local hrp = character:FindFirstChild('HumanoidRootPart')
-	if not hrp then return nil, nil, false end
-	
-	local rigType = character:FindFirstChild('Torso') and 'R6' or 'R15'
-	local position = hrp.Position
-	local cframe = hrp.CFrame
-	local upVector = cframe.UpVector
-	
-	-- Calculate top and bottom positions
-	local topY = rigType == 'R6' and 0.5 or 1.8
-	local bottomY = rigType == 'R6' and 4 or 2.5
-	
-	local top, topOnScreen = camera:WorldToViewportPoint(position + (upVector * topY))
-	local bottom, bottomOnScreen = camera:WorldToViewportPoint(position - (upVector * bottomY))
-	
-	if not (topOnScreen and bottomOnScreen) then
-		return nil, nil, false
-	end
-	
-	-- Calculate box dimensions
-	local width = math.max(math.floor(math.abs(top.X - bottom.X)), 3)
-	local height = math.max(math.floor(math.max(math.abs(bottom.Y - top.Y), width / 2)), 3)
-	local boxSize = Vector2.new(math.floor(math.max(height / 1.5, width)), height)
-	local boxPosition = Vector2.new(math.floor(top.X / 2 + bottom.X / 2 - boxSize.X / 2), math.floor(math.min(top.Y, bottom.Y)))
-	
-	return boxPosition, boxSize, true
-end
-
+-- ==================== ESP FUNCTIONS ====================
 local function CreateESP(player)
 	if not player.Character or ESPObjects[player] then return end
 	
@@ -413,123 +329,57 @@ local function CreateESP(player)
 	local humanoid = char:FindFirstChild('Humanoid')
 	if not hrp or not humanoid then return end
 	
-	-- Create ESP objects table
-	ESPObjects[player] = {
-		-- 2D Box
-		BoxOutline = Drawing.new('Square'),
-		Box = Drawing.new('Square'),
-		
-		-- Tracer
-		Tracer = Drawing.new('Line'),
-		
-		-- Text labels
-		NameText = Drawing.new('Text'),
-		DistanceText = Drawing.new('Text'),
-		HealthText = Drawing.new('Text'),
-		
-		-- Health bar
-		HealthBarOutline = Drawing.new('Line'),
-		HealthBar = Drawing.new('Line'),
-		
-		-- Head dot
-		HeadDotOutline = Drawing.new('Circle'),
-		HeadDot = Drawing.new('Circle'),
-		
-		-- Skeleton lines
-		Skeleton = {}
-	}
+	local espFolder = Instance.new('Folder')
+	espFolder.Name = 'ESP_' .. player.Name
+	espFolder.Parent = char
 	
-	-- Initialize skeleton lines
-	for i = 1, 6 do
-		ESPObjects[player].Skeleton[i] = Drawing.new('Line')
-	end
+	-- Billboard GUI for name and distance
+	local billboard = Instance.new('BillboardGui')
+	billboard.Name = 'ESPBillboard'
+	billboard.Adornee = hrp
+	billboard.Size = UDim2.new(0, 200, 0, 50)
+	billboard.StudsOffset = Vector3.new(0, 3, 0)
+	billboard.AlwaysOnTop = true
+	billboard.Parent = espFolder
 	
-	local espObj = ESPObjects[player]
+	local nameLabel = Instance.new('TextLabel')
+	nameLabel.Name = 'NameLabel'
+	nameLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = player.Name
+	nameLabel.TextColor3 = ESPSettings.NameColor
+	nameLabel.TextStrokeTransparency = 0.5
+	nameLabel.Font = Enum.Font.SourceSansBold
+	nameLabel.TextSize = 16
+	nameLabel.Parent = billboard
 	
-	-- Set default properties for box
-	espObj.BoxOutline.Thickness = 3
-	espObj.BoxOutline.Filled = false
-	espObj.BoxOutline.Color = Color3.fromRGB(0, 0, 0)
-	espObj.BoxOutline.Transparency = 1
-	espObj.Box.Thickness = 1
-	espObj.Box.Filled = false
-	espObj.Box.Color = ESPSettings.BoxColor
-	espObj.Box.Transparency = 1
+	local distanceLabel = Instance.new('TextLabel')
+	distanceLabel.Name = 'DistanceLabel'
+	distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+	distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+	distanceLabel.BackgroundTransparency = 1
+	distanceLabel.Text = '0m'
+	distanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+	distanceLabel.TextStrokeTransparency = 0.5
+	distanceLabel.Font = Enum.Font.SourceSans
+	distanceLabel.TextSize = 14
+	distanceLabel.Parent = billboard
 	
-	-- Set default properties for tracer
-	espObj.Tracer.Thickness = 1
-	espObj.Tracer.Color = ESPSettings.BoxColor
-	espObj.Tracer.Transparency = 1
+	-- Box ESP (Highlight)
+	local highlight = Instance.new('Highlight')
+	highlight.Name = 'ESPHighlight'
+	highlight.Adornee = char
+	highlight.FillTransparency = 0.7
+	highlight.OutlineColor = ESPSettings.BoxColor
+	highlight.FillColor = ESPSettings.BoxColor
+	highlight.Parent = espFolder
 	
-	-- Set default properties for text
-	espObj.NameText.Size = 13
-	espObj.NameText.Center = true
-	espObj.NameText.Outline = true
-	espObj.NameText.Color = ESPSettings.NameColor
-	espObj.NameText.Transparency = 1
-	
-	espObj.DistanceText.Size = 12
-	espObj.DistanceText.Center = true
-	espObj.DistanceText.Outline = true
-	espObj.DistanceText.Color = Color3.fromRGB(180, 180, 180)
-	espObj.DistanceText.Transparency = 1
-	
-	espObj.HealthText.Size = 11
-	espObj.HealthText.Outline = true
-	espObj.HealthText.Color = Color3.fromRGB(255, 255, 255)
-	espObj.HealthText.Transparency = 1
-	
-	-- Set default properties for health bar
-	espObj.HealthBarOutline.Thickness = 3
-	espObj.HealthBarOutline.Color = Color3.fromRGB(0, 0, 0)
-	espObj.HealthBarOutline.Transparency = 1
-	espObj.HealthBar.Thickness = 1
-	espObj.HealthBar.Transparency = 1
-	
-	-- Set default properties for head dot
-	espObj.HeadDotOutline.Thickness = 3
-	espObj.HeadDotOutline.NumSides = 30
-	espObj.HeadDotOutline.Color = Color3.fromRGB(0, 0, 0)
-	espObj.HeadDotOutline.Transparency = 1
-	espObj.HeadDotOutline.Filled = false
-	espObj.HeadDot.Thickness = 1
-	espObj.HeadDot.NumSides = 30
-	espObj.HeadDot.Color = ESPSettings.SkeletonColor
-	espObj.HeadDot.Transparency = 1
-	espObj.HeadDot.Filled = false
-	
-	-- Set default properties for skeleton
-	for i = 1, 6 do
-		espObj.Skeleton[i].Thickness = 1
-		espObj.Skeleton[i].Color = ESPSettings.SkeletonColor
-		espObj.Skeleton[i].Transparency = 1
-	end
+	ESPObjects[player] = espFolder
 end
 
 local function RemoveESP(player)
 	if ESPObjects[player] then
-		-- Remove all Drawing objects
-		local espObj = ESPObjects[player]
-		
-		if espObj.Box then espObj.Box:Remove() end
-		if espObj.BoxOutline then espObj.BoxOutline:Remove() end
-		if espObj.Tracer then espObj.Tracer:Remove() end
-		if espObj.NameText then espObj.NameText:Remove() end
-		if espObj.DistanceText then espObj.DistanceText:Remove() end
-		if espObj.HealthText then espObj.HealthText:Remove() end
-		if espObj.HealthBar then espObj.HealthBar:Remove() end
-		if espObj.HealthBarOutline then espObj.HealthBarOutline:Remove() end
-		if espObj.HeadDot then espObj.HeadDot:Remove() end
-		if espObj.HeadDotOutline then espObj.HeadDotOutline:Remove() end
-		
-		if espObj.Skeleton then
-			for i = 1, 6 do
-				if espObj.Skeleton[i] then
-					espObj.Skeleton[i]:Remove()
-				end
-			end
-		end
-		
+		ESPObjects[player]:Destroy()
 		ESPObjects[player] = nil
 	end
 end
@@ -538,15 +388,10 @@ local function UpdateESP()
 	local localPlayer = game.Players.LocalPlayer
 	if not localPlayer.Character or not localPlayer.Character:FindFirstChild('HumanoidRootPart') then return end
 	local localHRP = localPlayer.Character.HumanoidRootPart
-	local camera = workspace.CurrentCamera
 	
-	for player, espObj in pairs(ESPObjects) do
+	for player, espFolder in pairs(ESPObjects) do
 		if player and player.Character and player.Character:FindFirstChild('HumanoidRootPart') then
-			local char = player.Character
-			local hrp = char:FindFirstChild('HumanoidRootPart')
-			local humanoid = char:FindFirstChild('Humanoid')
-			local head = char:FindFirstChild('Head')
-			
+			local hrp = player.Character.HumanoidRootPart
 			local distance = (localHRP.Position - hrp.Position).Magnitude
 			
 			-- Check distance and team
@@ -555,175 +400,39 @@ local function UpdateESP()
 				shouldShow = false
 			end
 			
-			if humanoid and humanoid.Health <= 0 then
-				shouldShow = false
+			local billboard = espFolder:FindFirstChild('ESPBillboard')
+			local highlight = espFolder:FindFirstChild('ESPHighlight')
+			
+			if billboard then
+				billboard.Enabled = shouldShow and (ESPSettings.ShowName or ESPSettings.ShowDistance)
+				if billboard.Enabled then
+					local nameLabel = billboard:FindFirstChild('NameLabel')
+					local distanceLabel = billboard:FindFirstChild('DistanceLabel')
+					if nameLabel then
+						nameLabel.Visible = ESPSettings.ShowName
+						nameLabel.TextColor3 = ESPSettings.NameColor
+					end
+					if distanceLabel then
+						distanceLabel.Visible = ESPSettings.ShowDistance
+						distanceLabel.Text = math.floor(distance) .. 'm'
+					end
+				end
 			end
 			
-			-- Calculate 2D box
-			local boxPosition, boxSize, onScreen = CalculateBox(char)
+			if highlight then
+				highlight.Enabled = shouldShow and ESPSettings.ShowBox
+				if highlight.Enabled then
+					highlight.OutlineColor = ESPSettings.BoxColor
+					highlight.FillColor = ESPSettings.BoxColor
+				end
+			end
 			
-			if shouldShow and onScreen and boxPosition and boxSize then
-				-- Update Box ESP
-				if ESPSettings.BoxESP then
-					espObj.BoxOutline.Visible = true
-					espObj.BoxOutline.Position = boxPosition
-					espObj.BoxOutline.Size = boxSize
-					espObj.BoxOutline.Color = Color3.fromRGB(0, 0, 0)
-					
-					espObj.Box.Visible = true
-					espObj.Box.Position = boxPosition
-					espObj.Box.Size = boxSize
-					espObj.Box.Color = ESPSettings.BoxColor
-				else
-					espObj.BoxOutline.Visible = false
-					espObj.Box.Visible = false
-				end
-				
-				-- Update Tracer
-				if ESPSettings.ShowBox then
-					espObj.Tracer.Visible = true
-					local viewportSize = camera.ViewportSize
-					espObj.Tracer.From = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-					espObj.Tracer.To = Vector2.new(boxPosition.X + boxSize.X / 2, boxPosition.Y + boxSize.Y)
-					espObj.Tracer.Color = ESPSettings.BoxColor
-				else
-					espObj.Tracer.Visible = false
-				end
-				
-				-- Update Name
-				if ESPSettings.ShowName then
-					espObj.NameText.Visible = true
-					espObj.NameText.Text = player.DisplayName or player.Name
-					espObj.NameText.Position = Vector2.new(boxPosition.X + boxSize.X / 2, boxPosition.Y - 18)
-					espObj.NameText.Color = ESPSettings.NameColor
-				else
-					espObj.NameText.Visible = false
-				end
-				
-				-- Update Distance
-				if ESPSettings.ShowDistance then
-					espObj.DistanceText.Visible = true
-					espObj.DistanceText.Text = string.format('[%dm]', math.floor(distance))
-					espObj.DistanceText.Position = Vector2.new(boxPosition.X + boxSize.X / 2, boxPosition.Y + boxSize.Y + 5)
-				else
-					espObj.DistanceText.Visible = false
-				end
-				
-				-- Update Health Bar
-				if ESPSettings.ShowHealth and humanoid then
-					local health = humanoid.Health
-					local maxHealth = humanoid.MaxHealth
-					local healthPercent = health / maxHealth
-					
-					espObj.HealthBarOutline.Visible = true
-					espObj.HealthBarOutline.From = Vector2.new(boxPosition.X - 6, boxPosition.Y + boxSize.Y + 1)
-					espObj.HealthBarOutline.To = Vector2.new(boxPosition.X - 6, boxPosition.Y - 1)
-					
-					espObj.HealthBar.Visible = true
-					espObj.HealthBar.From = Vector2.new(boxPosition.X - 6, boxPosition.Y + boxSize.Y)
-					espObj.HealthBar.To = Vector2.new(boxPosition.X - 6, boxPosition.Y + boxSize.Y - (boxSize.Y * healthPercent))
-					espObj.HealthBar.Color = Color3.fromRGB(255 - math.floor(healthPercent * 255), math.floor(healthPercent * 255), 0)
-					
-					espObj.HealthText.Visible = true
-					espObj.HealthText.Text = tostring(math.floor(health))
-					espObj.HealthText.Position = Vector2.new(boxPosition.X - 20, boxPosition.Y + boxSize.Y - (boxSize.Y * healthPercent) - 7)
-				else
-					espObj.HealthBarOutline.Visible = false
-					espObj.HealthBar.Visible = false
-					espObj.HealthText.Visible = false
-				end
-				
-				-- Update Head Dot
-				if ESPSettings.SkeletonESP and head then
-					local headPos, headOnScreen = camera:WorldToViewportPoint(head.Position)
-					if headOnScreen then
-						local headTop = camera:WorldToViewportPoint((head.CFrame * CFrame.new(0, head.Size.Y / 2, 0)).Position)
-						local headBottom = camera:WorldToViewportPoint((head.CFrame * CFrame.new(0, -head.Size.Y / 2, 0)).Position)
-						local headRadius = math.abs((headTop - headBottom).Y) / 2
-						
-						espObj.HeadDotOutline.Visible = true
-						espObj.HeadDotOutline.Position = Vector2.new(headPos.X, headPos.Y)
-						espObj.HeadDotOutline.Radius = headRadius
-						
-						espObj.HeadDot.Visible = true
-						espObj.HeadDot.Position = Vector2.new(headPos.X, headPos.Y)
-						espObj.HeadDot.Radius = headRadius
-						espObj.HeadDot.Color = ESPSettings.SkeletonColor
-					else
-						espObj.HeadDotOutline.Visible = false
-						espObj.HeadDot.Visible = false
-					end
-				else
-					espObj.HeadDotOutline.Visible = false
-					espObj.HeadDot.Visible = false
-				end
-				
-				-- Update Skeleton
-				if ESPSettings.SkeletonESP then
-					local torso = char:FindFirstChild('UpperTorso') or char:FindFirstChild('Torso')
-					local leftArm = char:FindFirstChild('LeftUpperArm') or char:FindFirstChild('Left Arm')
-					local rightArm = char:FindFirstChild('RightUpperArm') or char:FindFirstChild('Right Arm')
-					local leftLeg = char:FindFirstChild('LeftUpperLeg') or char:FindFirstChild('Left Leg')
-					local rightLeg = char:FindFirstChild('RightUpperLeg') or char:FindFirstChild('Right Leg')
-					
-					local parts = {head, torso, leftArm, rightArm, leftLeg, rightLeg}
-					local validParts = true
-					
-					for _, part in pairs(parts) do
-						if not part then
-							validParts = false
-							break
-						end
-					end
-					
-					if validParts then
-						local connections = {
-							{head, torso}, -- Neck
-							{torso, leftArm}, -- Left shoulder
-							{torso, rightArm}, -- Right shoulder
-							{torso, leftLeg}, -- Left hip
-							{torso, rightLeg}, -- Right hip
-							{leftLeg, rightLeg} -- Pelvis
-						}
-						
-						for i = 1, 6 do
-							local from, to = connections[i][1], connections[i][2]
-							local fromPos, fromOnScreen = camera:WorldToViewportPoint(from.Position)
-							local toPos, toOnScreen = camera:WorldToViewportPoint(to.Position)
-							
-							if fromOnScreen and toOnScreen then
-								espObj.Skeleton[i].Visible = true
-								espObj.Skeleton[i].From = Vector2.new(fromPos.X, fromPos.Y)
-								espObj.Skeleton[i].To = Vector2.new(toPos.X, toPos.Y)
-								espObj.Skeleton[i].Color = ESPSettings.SkeletonColor
-							else
-								espObj.Skeleton[i].Visible = false
-							end
-						end
-					else
-						for i = 1, 6 do
-							espObj.Skeleton[i].Visible = false
-						end
-					end
-				else
-					for i = 1, 6 do
-						espObj.Skeleton[i].Visible = false
-					end
-				end
-			else
-				-- Hide all ESP elements
-				if espObj.Box then espObj.Box.Visible = false end
-				if espObj.BoxOutline then espObj.BoxOutline.Visible = false end
-				if espObj.Tracer then espObj.Tracer.Visible = false end
-				if espObj.NameText then espObj.NameText.Visible = false end
-				if espObj.DistanceText then espObj.DistanceText.Visible = false end
-				if espObj.HealthText then espObj.HealthText.Visible = false end
-				if espObj.HealthBar then espObj.HealthBar.Visible = false end
-				if espObj.HealthBarOutline then espObj.HealthBarOutline.Visible = false end
-				if espObj.HeadDot then espObj.HeadDot.Visible = false end
-				if espObj.HeadDotOutline then espObj.HeadDotOutline.Visible = false end
-				for i = 1, 6 do
-					if espObj.Skeleton[i] then espObj.Skeleton[i].Visible = false end
+			-- Health bar update
+			if ESPSettings.ShowHealth then
+				local humanoid = player.Character:FindFirstChild('Humanoid')
+				if humanoid and billboard and billboard.Enabled then
+					local healthPercent = humanoid.Health / humanoid.MaxHealth
+					-- Could add health bar frame here if needed
 				end
 			end
 		else
@@ -1112,7 +821,7 @@ ESPBox:AddToggle('ShowDistance', {
 })
 
 ESPBox:AddToggle('ShowBox', {
-	Text = 'Show Line',
+	Text = 'Show Box',
 	Default = true,
 	Tooltip = 'Display box around players',
 	Callback = function(Value)
@@ -1157,17 +866,6 @@ ESPBox:AddToggle('TeamCheck', {
 	Tooltip = 'Hide teammates from ESP',
 	Callback = function(Value)
 		ESPSettings.TeamCheck = Value
-	end
-})
-
-ESPBox:AddToggle('ShowSelf', {
-	Text = 'Show Self ESP',
-	Default = true,
-	Tooltip = 'Show ESP on your own character (affects preview)',
-	Callback = function(Value)
-		ESPSettings.ShowSelf = Value
-		print('[ESP Settings] ShowSelf toggled to:', Value)
-		UpdateESPPreview()
 	end
 })
 
@@ -1289,29 +987,11 @@ ESPColorsBox:AddLabel('Name Color:'):AddColorPicker('NameColor', {
 	end
 })
 
-ESPColorsBox:AddLabel('Distance Color:'):AddColorPicker('DistanceColor', {
-	Default = Color3.fromRGB(180, 180, 180),
-	Title = 'Distance Color',
-	Callback = function(Value)
-		ESPSettings.DistanceColor = Value
-		UpdateESPPreview()
-	end
-})
-
 ESPColorsBox:AddLabel('Box Color:'):AddColorPicker('BoxColor', {
 	Default = Color3.fromRGB(255, 0, 0),
 	Title = 'Box Color',
 	Callback = function(Value)
 		ESPSettings.BoxColor = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPColorsBox:AddLabel('Tracer Color:'):AddColorPicker('TracerColor', {
-	Default = Color3.fromRGB(255, 255, 255),
-	Title = 'Tracer Color',
-	Callback = function(Value)
-		ESPSettings.TracerColor = Value
 		UpdateESPPreview()
 	end
 })
@@ -1489,7 +1169,6 @@ Library:AddToRegistry(ContentFrame, {
 })
 
 -- ViewportFrame for 3D Player Avatar
-print('[ESP Preview] Creating ViewportFrame...')
 local ViewportFrame = Instance.new('ViewportFrame')
 ViewportFrame.Size = UDim2.new(1, 0, 1, -40)
 ViewportFrame.Position = UDim2.new(0, 0, 0, 20)
@@ -1503,166 +1182,35 @@ ViewportFrame.Ambient = Color3.fromRGB(150, 150, 150)
 ViewportFrame.ZIndex = 7
 ViewportFrame.Parent = ContentFrame
 
-print('[ESP Preview] ViewportFrame created, size:', ViewportFrame.Size)
-
 -- Camera for viewport
-print('[ESP Preview] Creating ViewportCamera...')
 ViewportCamera = Instance.new('Camera')
 ViewportCamera.Parent = ViewportFrame
 ViewportFrame.CurrentCamera = ViewportCamera
-print('[ESP Preview] Camera assigned to ViewportFrame')
-
--- ESP OVERLAY CONTAINER - Sits on top of ViewportFrame
-local ESPOverlay = Library:Create('Frame', {
-	BackgroundTransparency = 1;  -- Transparent
-	Size = UDim2.new(1, 0, 1, 0);  -- Full size
-	Position = UDim2.new(0, 0, 0, 0);
-	ZIndex = 20;  -- Higher than ViewportFrame (7)
-	Parent = ContentFrame;
-})
-print('[ESP Preview] ===== ESP OVERLAY CONTAINER CREATED =====')
-
--- Create placeholder dummy avatar
-local function CreateDummyAvatar()
-	print('[ESP Preview] Creating placeholder dummy avatar...')
-	
-	-- Clear existing
-	for _, child in pairs(ViewportFrame:GetChildren()) do
-		if child:IsA('Model') or child:IsA('WorldModel') then
-			child:Destroy()
-		elseif child:IsA('Part') or child:IsA('MeshPart') then
-			child:Destroy()
-		end
-	end
-	
-	local worldModel = Instance.new('WorldModel')
-	worldModel.Parent = ViewportFrame
-	
-	local dummyModel = Instance.new('Model')
-	dummyModel.Name = 'Dummy'
-	dummyModel.Parent = worldModel
-	
-	-- Create simple R15 dummy
-	local torso = Instance.new('Part')
-	torso.Name = 'UpperTorso'
-	torso.Size = Vector3.new(2, 2, 1)
-	torso.Position = Vector3.new(0, 0, 0)
-	torso.Anchored = true
-	torso.BrickColor = BrickColor.new('Bright blue')
-	torso.Material = Enum.Material.SmoothPlastic
-	torso.Parent = dummyModel
-	
-	local head = Instance.new('Part')
-	head.Name = 'Head'
-	head.Size = Vector3.new(2, 1, 1)
-	head.Position = Vector3.new(0, 1.5, 0)
-	head.Anchored = true
-	head.BrickColor = BrickColor.new('Bright yellow')
-	head.Material = Enum.Material.SmoothPlastic
-	
-	-- Add face mesh to head
-	local mesh = Instance.new('SpecialMesh')
-	mesh.MeshType = Enum.MeshType.Head
-	mesh.Scale = Vector3.new(1.25, 1.25, 1.25)
-	mesh.Parent = head
-	head.Parent = dummyModel
-	
-	local leftArm = Instance.new('Part')
-	leftArm.Name = 'LeftUpperArm'
-	leftArm.Size = Vector3.new(1, 2, 1)
-	leftArm.Position = Vector3.new(-1.5, 0, 0)
-	leftArm.Anchored = true
-	leftArm.BrickColor = BrickColor.new('Bright yellow')
-	leftArm.Material = Enum.Material.SmoothPlastic
-	leftArm.Parent = dummyModel
-	
-	local rightArm = Instance.new('Part')
-	rightArm.Name = 'RightUpperArm'
-	rightArm.Size = Vector3.new(1, 2, 1)
-	rightArm.Position = Vector3.new(1.5, 0, 0)
-	rightArm.Anchored = true
-	rightArm.BrickColor = BrickColor.new('Bright yellow')
-	rightArm.Material = Enum.Material.SmoothPlastic
-	rightArm.Parent = dummyModel
-	
-	local leftLeg = Instance.new('Part')
-	leftLeg.Name = 'LeftUpperLeg'
-	leftLeg.Size = Vector3.new(1, 2, 1)
-	leftLeg.Position = Vector3.new(-0.5, -2, 0)
-	leftLeg.Anchored = true
-	leftLeg.BrickColor = BrickColor.new('Br. yellowish green')
-	leftLeg.Material = Enum.Material.SmoothPlastic
-	leftLeg.Parent = dummyModel
-	
-	local rightLeg = Instance.new('Part')
-	rightLeg.Name = 'RightUpperLeg'
-	rightLeg.Size = Vector3.new(1, 2, 1)
-	rightLeg.Position = Vector3.new(0.5, -2, 0)
-	rightLeg.Anchored = true
-	rightLeg.BrickColor = BrickColor.new('Br. yellowish green')
-	rightLeg.Material = Enum.Material.SmoothPlastic
-	rightLeg.Parent = dummyModel
-	
-	dummyModel.PrimaryPart = torso
-	CharacterModel = dummyModel
-	
-	-- Setup camera (simple like backup)
-	ViewportCamera.CFrame = CFrame.new(0, 1, CameraDistance)
-	ViewportCamera.Focus = CFrame.new(0, 1, 0)
-	ViewportCamera.FieldOfView = 50
-	
-	print('[ESP Preview] Dummy avatar created successfully')
-	print('[ESP Preview] Dummy parts:', #dummyModel:GetChildren())
-	print('[ESP Preview] Camera CFrame:', ViewportCamera.CFrame)
-	print('[ESP Preview] Camera looking from FRONT (Z+)')
-	print('[ESP Preview] Model center:', torso.Position)
-end
 
 -- Clone player character for preview
 local function UpdatePlayerAvatar()
-	print('[ESP Preview] === Starting UpdatePlayerAvatar ===')
-	
 	local success, errorMsg = pcall(function()
-		-- Clear existing models completely (except Camera)
+		-- Clear existing models completely
 		for _, child in pairs(ViewportFrame:GetChildren()) do
 			if child:IsA('Model') or child:IsA('WorldModel') then
-				print('[ESP Preview] Destroying old model:', child.Name)
-				child:Destroy()
-			elseif child:IsA('Part') or child:IsA('MeshPart') then
-				print('[ESP Preview] Destroying old part:', child.Name)
 				child:Destroy()
 			end
 		end
 		
 		CharacterModel = nil
-		PartMap = {}
 		
 		local player = game.Players.LocalPlayer
-		if not player then 
-			warn('[ESP Preview] Player is nil!')
-			CreateDummyAvatar()
+		if not player or not player.Character then 
+			warn('[ESP Preview] Character not found')
 			return 
 		end
-		
-		if not player.Character then 
-			warn('[ESP Preview] Character not found! Creating dummy...')
-			CreateDummyAvatar()
-			return 
-		end
-		
-		print('[ESP Preview] Player found:', player.Name)
-		print('[ESP Preview] Player found:', player.Name)
 		
 		local char = player.Character
 		local hrp = char:FindFirstChild('HumanoidRootPart')
 		if not hrp then 
-			warn('[ESP Preview] HumanoidRootPart not found! Creating dummy...')
-			CreateDummyAvatar()
+			warn('[ESP Preview] HumanoidRootPart not found')
 			return 
 		end
-		
-		print('[ESP Preview] Character valid, HRP found')
-		print('[ESP Preview] Character children count:', #char:GetChildren())
 		
 		-- Use WorldModel for better viewport rendering
 		local worldModel = Instance.new('WorldModel')
@@ -1794,14 +1342,6 @@ local function UpdatePlayerAvatar()
 		
 		print('[ESP Preview] Cloned', partsCloned, 'items from character')
 		
-		if partsCloned == 0 then
-			warn('[ESP Preview] No parts cloned! Creating dummy...')
-			CreateDummyAvatar()
-			return
-		end
-		
-		print('[ESP Preview] Total items in charModel:', #charModel:GetChildren())
-		
 		-- Position character in viewport
 		if hrpClone then
 			charModel.PrimaryPart = hrpClone
@@ -1819,131 +1359,52 @@ local function UpdatePlayerAvatar()
 				end
 			end
 			
-			-- Update camera (simple like backup)
+			-- Update camera with current zoom
 			ViewportCamera.CFrame = CFrame.new(0, 1, CameraDistance)
 			ViewportCamera.Focus = CFrame.new(0, 1, 0)
 			ViewportCamera.FieldOfView = 40
 			
 			print('[ESP Preview] Avatar rendered! Parts:', #charModel:GetDescendants())
-			print('[ESP Preview] Camera CFrame:', ViewportCamera.CFrame)
-			print('[ESP Preview] Model Position:', hrpClone.Position)
-			print('[ESP Preview] WorldModel Children:', #worldModel:GetChildren())
-			print('[ESP Preview] WorldModel Parent:', worldModel.Parent and worldModel.Parent.Name or 'nil')
-			print('[ESP Preview] CharModel Parent:', charModel.Parent and charModel.Parent.Name or 'nil')
-			print('[ESP Preview] ViewportFrame Visible:', ViewportFrame.Visible)
-			print('[ESP Preview] ViewportFrame Parent:', ViewportFrame.Parent and ViewportFrame.Parent.Name or 'nil')
-			print('[ESP Preview] ViewportFrame Size:', ViewportFrame.AbsoluteSize)
-			print('[ESP Preview] ViewportFrame Position:', ViewportFrame.AbsolutePosition)
-			print('[ESP Preview] Camera FieldOfView:', ViewportCamera.FieldOfView)
 			
-			-- Verify parts are actually visible
-			local visibleParts = 0
-			for _, part in pairs(charModel:GetDescendants()) do
-				if part:IsA('BasePart') and part.Transparency < 1 then
-					visibleParts = visibleParts + 1
-				end
-			end
-			print('[ESP Preview] Visible parts (Transparency < 1):', visibleParts)
-			
-			-- Call UpdateESPPreview immediately to show ESP overlays
-			print('[ESP Preview] Calling UpdateESPPreview to show overlays...')
-			print('[ESP Preview] ESPSettings.BoxESP:', ESPSettings.BoxESP)
-			print('[ESP Preview] ESPSettings.SkeletonESP:', ESPSettings.SkeletonESP)
-			print('[ESP Preview] ESPSettings.ShowName:', ESPSettings.ShowName)
-			print('[ESP Preview] ESPPreviewFrame exists:', ESPPreviewFrame ~= nil)
-			
-			if ESPPreviewFrame then
-				print('[ESP Preview] Elements check:')
-				print('  - BoxOutline:', ESPPreviewFrame.BoxOutline ~= nil)
-				print('  - HeadCircle:', ESPPreviewFrame.HeadCircle ~= nil)
-				print('  - NameLabel:', ESPPreviewFrame.NameLabel ~= nil)
-				print('  - HealthBarBG:', ESPPreviewFrame.HealthBarBG ~= nil)
-			end
-			
+			-- Update ESP preview overlays
+			task.wait(0.1)
 			UpdateESPPreview()
-			
-			-- Force show ESP elements after small delay
-			spawn(function()
-				task.wait(0.3)
-				if ESPPreviewFrame then
-					print('[ESP Preview] ===== FORCE SHOWING ALL ESP (IGNORE SETTINGS FOR NOW) =====')
-					
-					-- FORCE Box ESP VISIBLE
-					if ESPPreviewFrame.BoxOutline then
-						ESPPreviewFrame.BoxOutline.Visible = true
-						ESPPreviewFrame.BoxOutline.BorderColor3 = ESPSettings.BoxColor
-						print('[ESP Preview] BoxOutline FORCED VISIBLE')
-						print('[ESP Preview] BoxOutline.BorderSizePixel:', ESPPreviewFrame.BoxOutline.BorderSizePixel)
-						print('[ESP Preview] BoxOutline.AbsoluteSize:', ESPPreviewFrame.BoxOutline.AbsoluteSize)
-					end
-					
-					-- FORCE Skeleton VISIBLE
-					if ESPPreviewFrame.HeadCircle then
-						ESPPreviewFrame.HeadCircle.Visible = true
-						ESPPreviewFrame.HeadCircle.BorderColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.BodyRect then
-						ESPPreviewFrame.BodyRect.Visible = true
-						ESPPreviewFrame.BodyRect.BorderColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.LeftLeg then
-						ESPPreviewFrame.LeftLeg.Visible = true
-						ESPPreviewFrame.LeftLeg.BorderColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.RightLeg then
-						ESPPreviewFrame.RightLeg.Visible = true
-						ESPPreviewFrame.RightLeg.BorderColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.LeftArm then
-						ESPPreviewFrame.LeftArm.Visible = true
-						ESPPreviewFrame.LeftArm.BackgroundColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.RightArm then
-						ESPPreviewFrame.RightArm.Visible = true
-						ESPPreviewFrame.RightArm.BackgroundColor3 = ESPSettings.SkeletonColor
-					end
-					if ESPPreviewFrame.Spine then
-						ESPPreviewFrame.Spine.Visible = true
-						ESPPreviewFrame.Spine.BackgroundColor3 = ESPSettings.SkeletonColor
-					end
-					print('[ESP Preview] Skeleton FORCED VISIBLE')
-					
-					-- FORCE Name VISIBLE
-					if ESPPreviewFrame.NameLabel then
-						ESPPreviewFrame.NameLabel.Visible = true
-						ESPPreviewFrame.NameLabel.TextColor3 = ESPSettings.NameColor
-						print('[ESP Preview] NameLabel FORCED VISIBLE')
-					end
-					
-					-- FORCE Distance VISIBLE
-					if ESPPreviewFrame.DistanceLabel then
-						ESPPreviewFrame.DistanceLabel.Visible = true
-						print('[ESP Preview] DistanceLabel FORCED VISIBLE')
-					end
-					
-					-- FORCE Health Bar VISIBLE
-					if ESPPreviewFrame.HealthBarBG then
-						ESPPreviewFrame.HealthBarBG.Visible = true
-						print('[ESP Preview] HealthBarBG FORCED VISIBLE')
-					end
-					
-					print('[ESP Preview] ===== ALL ESP FORCED TO VISIBLE =====')
-				end
-			end)
 		else
-			warn('[ESP Preview] HumanoidRootPart not found in clone! Creating dummy...')
-			CreateDummyAvatar()
+			warn('[ESP Preview] HumanoidRootPart not found in clone')
 		end
 	end)
 	
 	
 	if not success then
 		warn('[ESP Preview] Failed to load avatar:', errorMsg)
-		warn('[ESP Preview] Stack trace:', debug.traceback())
-		CreateDummyAvatar()
+		-- Create simple placeholder
+		pcall(function()
+			local dummy = Instance.new('Model')
+			dummy.Name = 'Placeholder'
+			dummy.Parent = ViewportFrame
+			
+			local torso = Instance.new('Part')
+			torso.Name = 'HumanoidRootPart'
+			torso.Size = Vector3.new(2, 2, 1)
+			torso.CFrame = CFrame.new(0, 0, 0)
+			torso.Anchored = true
+			torso.BrickColor = BrickColor.new('Bright blue')
+			torso.Parent = dummy
+			
+			local head = Instance.new('Part')
+			head.Name = 'Head'
+			head.Size = Vector3.new(2, 1, 1)
+			head.CFrame = CFrame.new(0, 1.5, 0)
+			head.Anchored = true
+			head.BrickColor = BrickColor.new('Bright yellow')
+			head.Parent = dummy
+			
+			ViewportCamera.CFrame = CFrame.new(0, 2, 6) * CFrame.Angles(0, math.rad(180), 0)
+			ViewportCamera.FieldOfView = 35
+			
+			print('[ESP Preview] Placeholder loaded')
+		end)
 	end
-	
-	print('[ESP Preview] === UpdatePlayerAvatar completed ===')
 end
 
 -- Mouse drag to rotate
@@ -1994,86 +1455,44 @@ ViewportFrame.InputChanged:Connect(function(input)
 end)
 
 -- Update avatar when character spawns (with delay)
-spawn(function()
-	print('[ESP Preview] Waiting for character...')
-	local player = game.Players.LocalPlayer
-	
-	-- Wait for character to exist
-	if not player.Character then
-		print('[ESP Preview] Character not found, waiting...')
-		player.CharacterAdded:Wait()
-	end
-	
-	local char = player.Character or player.CharacterAdded:Wait()
-	
-	-- Wait for HumanoidRootPart
-	local hrp = char:FindFirstChild('HumanoidRootPart')
-	if not hrp then
-		print('[ESP Preview] Waiting for HumanoidRootPart...')
-		hrp = char:WaitForChild('HumanoidRootPart', 10)
-	end
-	
-	if hrp then
-		print('[ESP Preview] Character ready! Will load avatar after UI setup...')
-		-- Don't call UpdatePlayerAvatar here - called after ESPPreviewFrame is ready
-	else
-		warn('[ESP Preview] HumanoidRootPart timeout, creating dummy')
-		CreateDummyAvatar()
+task.delay(1, function()
+	if game.Players.LocalPlayer.Character then
+		UpdatePlayerAvatar()
 	end
 end)
 
 game.Players.LocalPlayer.CharacterAdded:Connect(function(char)
-	print('[ESP Preview] Character respawned, reloading avatar...')
 	-- Wait for character to fully load
-	local hrp = char:FindFirstChild('HumanoidRootPart')
-	if not hrp then
-		print('[ESP Preview] Waiting for HumanoidRootPart on respawn...')
-		hrp = char:WaitForChild('HumanoidRootPart', 10)
-	end
-	
-	if hrp then
-		print('[ESP Preview] Respawn detected, will update avatar after delay...')
+	if char:FindFirstChild('HumanoidRootPart') then
 		task.wait(0.5)
-		if ESPPreviewFrame then
-			UpdatePlayerAvatar()
-		else
-			print('[ESP Preview] ESPPreviewFrame not ready yet on respawn')
-		end
+		UpdatePlayerAvatar()
 	else
-		warn('[ESP Preview] HumanoidRootPart timeout on respawn')
-		CreateDummyAvatar()
+		char:WaitForChild('HumanoidRootPart', 5)
+		task.wait(0.5)
+		UpdatePlayerAvatar()
 	end
 end)
 
--- Box ESP Outline (2D Box around player) - IN OVERLAY CONTAINER
+-- Box ESP Outline (2D Box around player)
 local BoxOutline = Library:Create('Frame', {
-	BackgroundColor3 = Color3.fromRGB(255, 0, 0);  -- SOLID RED background
-	BackgroundTransparency = 0.7;  -- Semi-transparent to see avatar
-	BorderColor3 = Color3.fromRGB(255, 255, 255);  -- White border
+	BackgroundTransparency = 1;
+	BorderColor3 = ESPSettings.BoxColor;
 	BorderSizePixel = 2;
-	Position = UDim2.new(0.5, -50, 0.5, -75);  -- Fit avatar better
-	Size = UDim2.new(0, 100, 0, 150);  -- Taller for full avatar
-	ZIndex = 21;
-	Visible = true;  -- START VISIBLE
-	Parent = ESPOverlay;
+	Position = UDim2.new(0.5, -40, 0.5, -60);
+	Size = UDim2.new(0, 80, 0, 120);
+	ZIndex = 10;
+	Visible = false;
+	Parent = ContentFrame;
 })
 
-print('[ESP Preview] ===== BOX OUTLINE CREATED =====')
-print('[ESP Preview] BoxOutline should be RED BOX with WHITE border')
-print('[ESP Preview] BoxOutline.Visible:', BoxOutline.Visible)
-print('[ESP Preview] BoxOutline.BackgroundColor3:', BoxOutline.BackgroundColor3)
-print('[ESP Preview] BoxOutline.BackgroundTransparency:', BoxOutline.BackgroundTransparency)
-
--- Skeleton overlay container - IN OVERLAY
+-- Skeleton overlay container
 local SkeletonContainer = Library:Create('Frame', {
 	BackgroundTransparency = 1;
-	Position = UDim2.new(0.5, -40, 0.5, -70);  -- Fit to avatar
-	Size = UDim2.new(0, 80, 0, 140);  -- Bigger for full skeleton
-	ZIndex = 22;
-	Parent = ESPOverlay;
+	Position = UDim2.new(0.5, -32, 0.5, -50);
+	Size = UDim2.new(0, 64, 0, 100);
+	ZIndex = 11;
+	Parent = ContentFrame;
 })
-
-print('[ESP Preview] SkeletonContainer created in ESPOverlay')
 
 -- Player Head Circle
 local HeadCircle = Library:Create('Frame', {
@@ -2162,15 +1581,13 @@ local Spine = Library:Create('Frame', {
 -- Player Name Label (above box)
 local playerName = game.Players.LocalPlayer.DisplayName or game.Players.LocalPlayer.Name
 local NameLabel = Library:CreateLabel({
-	Position = UDim2.new(0.5, -60, 0, 2);  -- Back to ContentFrame positioning
+	Position = UDim2.new(0.5, -60, 0, 2);
 	Size = UDim2.new(0, 120, 0, 16);
 	Text = playerName;
 	TextSize = 12;
 	TextColor3 = ESPSettings.NameColor;
-	BackgroundTransparency = 1;
-	TextStrokeTransparency = 0.5;
-	ZIndex = 25;
-	Parent = ESPOverlay;  -- IN OVERLAY
+	ZIndex = 15;
+	Parent = ContentFrame;
 })
 
 -- Distance Label (below box)
@@ -2180,26 +1597,20 @@ local DistanceLabel = Library:CreateLabel({
 	Text = '< Weapon >';
 	TextSize = 10;
 	TextColor3 = Color3.fromRGB(180, 180, 180);
-	BackgroundTransparency = 1;
-	TextStrokeTransparency = 0.5;
-	ZIndex = 25;
-	Parent = ESPOverlay;  -- IN OVERLAY
+	ZIndex = 15;
+	Parent = ContentFrame;
 })
 
-print('[ESP Preview] Name and Distance labels created in ESPOverlay')
-
--- Health Bar Background (Left side of box) - IN OVERLAY
+-- Health Bar Background (Left side of box)
 local HealthBarBG = Library:Create('Frame', {
 	BackgroundColor3 = Color3.fromRGB(30, 30, 30);
 	BorderColor3 = Color3.fromRGB(0, 0, 0);
 	BorderSizePixel = 1;
 	Position = UDim2.new(0, 8, 0.5, -50);
 	Size = UDim2.new(0, 4, 0, 100);
-	ZIndex = 23;
-	Parent = ESPOverlay;  -- IN OVERLAY
+	ZIndex = 13;
+	Parent = ContentFrame;
 })
-
-print('[ESP Preview] HealthBarBG created in ESPOverlay')
 
 -- Health Bar Fill
 local HealthBar = Library:Create('Frame', {
@@ -2218,8 +1629,6 @@ local HealthText = Library:CreateLabel({
 	Text = '75';
 	TextSize = 9;
 	TextXAlignment = Enum.TextXAlignment.Right;
-	BackgroundTransparency = 1;
-	TextStrokeTransparency = 0.5;
 	ZIndex = 15;
 	Parent = HealthBarBG;
 })
@@ -2247,13 +1656,3 @@ ESPPreviewFrame = {
 	HealthText = HealthText;
 	ContentFrame = ContentFrame;
 }
-
-print('[ESP Preview] ESPPreviewFrame initialized with all elements')
-print('[ESP Preview] BoxOutline:', BoxOutline)
-print('[ESP Preview] HeadCircle:', HeadCircle)
-print('[ESP Preview] NameLabel:', NameLabel)
-
--- NOW load the avatar after ESPPreviewFrame is ready
-task.wait(0.1)
-UpdatePlayerAvatar()
-
