@@ -90,6 +90,9 @@ local function ReloadWords()
 		while not loaded do
 			wait(0.1)
 		end
+		if StatusLabel then
+			StatusLabel:SetText('✅ Words Loaded: ' .. #Words)
+		end
 	end)
 end
 
@@ -367,13 +370,41 @@ SettingsTab:AddDivider()
 
 -- Search Results in separate card (CREATE FIRST)
 local ResultsBox = Tabs.Main:AddLeftGroupbox('Search Results')
-local PageInfoLabel = ResultsBox:AddLabel('Page: 1 / 1 | Total: 0 words', true)
-ResultsBox:AddDivider()
 
 -- Table with proper widget
 local ResultsTable = ResultsBox:AddTable({
 	Headers = {'No', 'Word'};
 	MaxRows = 15;
+})
+
+ResultsBox:AddDivider()
+
+-- Pagination info and controls at bottom
+local PageInfoLabel = ResultsBox:AddLabel('Page: 1 / 1 | Total: 0 words', true)
+
+ResultsBox:AddButton({
+	Text = 'Prev',
+	DoubleClick = false,
+	Tooltip = 'Go to previous page',
+	Func = function()
+		if #currentSearchResults > 0 and currentPage > 1 then
+			currentPage = currentPage - 1
+			UpdateResultsDisplay()
+		end
+	end
+}):AddButton({
+	Text = 'Next',
+	DoubleClick = false,
+	Tooltip = 'Go to next page',
+	Func = function()
+		if #currentSearchResults > 0 then
+			local totalPages = math.ceil(#currentSearchResults / wordsPerPage)
+			if currentPage < totalPages then
+				currentPage = currentPage + 1
+				UpdateResultsDisplay()
+			end
+		end
+	end
 })
 
 -- Update results display function (define before use)
@@ -404,11 +435,6 @@ local function UpdateResultsDisplay()
 	PageInfoLabel:SetText('Page: ' .. currentPage .. ' / ' .. totalPages .. ' | Total: ' .. #currentSearchResults .. ' words')
 end
 
--- Hook updates to search and pagination
-local function Refresh()
-	UpdateResultsDisplay()
-end
-
 -- Search Input
 WordTab:AddInput('SearchInput', {
 	Default = '',
@@ -432,7 +458,7 @@ WordTab:AddInput('SearchInput', {
 })
 
 WordTab:AddDivider()
--- WordTab:AddLabel('Quick Search:')
+
 WordTab:AddDropdown('QuickSearch', {
 	Values = { 'cat', 'dog', 'test', 'word', 'game', 'code', 'script', 'roblox' },
 	Default = 1,
@@ -443,36 +469,6 @@ WordTab:AddDropdown('QuickSearch', {
 		Options.SearchInput:SetValue(Value)
 	end
 })
-
-WordTab:AddDivider()
-
--- Pagination controls inline
-WordTab:AddButton({
-	Text = 'Prev',
-	DoubleClick = false,
-	Tooltip = 'Go to previous page',
-	Func = function()
-		if #currentSearchResults > 0 and currentPage > 1 then
-			currentPage = currentPage - 1
-			Refresh()
-		end
-	end
-}):AddButton({
-	Text = 'Next',
-	DoubleClick = false,
-	Tooltip = 'Go to next page',
-	Func = function()
-		if #currentSearchResults > 0 then
-			local totalPages = math.ceil(#currentSearchResults / wordsPerPage)
-			if currentPage < totalPages then
-				currentPage = currentPage + 1
-				Refresh()
-			end
-		end
-	end
-})
-
-WordTab:AddDivider()
 
 -- Settings sub-tab
 SettingsTab:AddSlider('MinChars', {
