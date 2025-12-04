@@ -1903,14 +1903,18 @@ do
         });
 
         local ToggleLabel = Library:CreateLabel({
-            Size = UDim2.new(1, -24, 1, 0);
-            Position = UDim2.new(0, 20, 0, 0);
+            Size = UDim2.new(1, -4, 1, 0);
+            Position = UDim2.new(0, 0, 0, 0);
             TextSize = 14;
             Text = Info.Text;
             TextXAlignment = Enum.TextXAlignment.Left;
             ZIndex = 6;
             Parent = ToggleInner;
         });
+
+        if Info.Text then
+            ToggleLabel.Text = '    ' .. Info.Text
+        end
 
         Library:Create('UIListLayout', {
             Padding = UDim.new(0, 4);

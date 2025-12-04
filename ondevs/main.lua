@@ -1423,15 +1423,6 @@ end)
 
 Library.KeybindFrame.Visible = true
 
--- Connect ESP preview visibility to main window (handles both manual visibility changes AND Library:Toggle())
-if SecondaryWindow then
-	Window.Holder:GetPropertyChangedSignal('Visible'):Connect(function()
-		if SecondaryWindow.Holder then
-			SecondaryWindow.Holder.Visible = Window.Holder.Visible
-		end
-	end)
-end
-
 Library:OnUnload(function()
 	WatermarkConnection:Disconnect()
 	print('hubsense unloaded!')
@@ -1491,6 +1482,16 @@ end
 -- Connect to main window position changes
 Window.Holder:GetPropertyChangedSignal('AbsolutePosition'):Connect(UpdateSecondaryPosition)
 Window.Holder:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateSecondaryPosition)
+
+-- Keep secondary window visibility in sync with the main window toggle
+if SecondaryWindow and SecondaryWindow.Holder then
+	SecondaryWindow.Holder.Visible = Window.Holder.Visible
+	Window.Holder:GetPropertyChangedSignal('Visible'):Connect(function()
+		if SecondaryWindow.Holder then
+			SecondaryWindow.Holder.Visible = Window.Holder.Visible
+		end
+	end)
+end
 
 -- Get container from secondary window
 local SecondaryContainer = SecondaryWindow:GetContainer()
