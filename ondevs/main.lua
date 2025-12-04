@@ -181,16 +181,56 @@ spawn(LoadWords)
 local function UpdateESPPreview()
 	if not ESPPreviewFrame then return end
 	
-	-- Update using LinoriaLib's native Update method
-	ESPPreviewFrame:Update({
-		ShowBox = ESPSettings.ShowBox;
-		ShowName = ESPSettings.ShowName;
-		ShowDistance = ESPSettings.ShowDistance;
-		ShowHealth = ESPSettings.ShowHealth;
-		BoxColor = ESPSettings.BoxColor;
-		NameColor = ESPSettings.NameColor;
-		HealthBarColor = ESPSettings.HealthBarColor;
-	})
+	-- Update Box colors and visibility
+	if ESPPreviewFrame.BoxTop then
+		ESPPreviewFrame.BoxTop.Visible = ESPSettings.ShowBox
+		ESPPreviewFrame.BoxTop.BorderColor3 = ESPSettings.BoxColor
+	end
+	
+	if ESPPreviewFrame.HeadCircle then
+		ESPPreviewFrame.HeadCircle.BorderColor3 = ESPSettings.BoxColor
+		ESPPreviewFrame.HeadCircle.Visible = ESPSettings.ShowBox
+	end
+	
+	if ESPPreviewFrame.BodyRect then
+		ESPPreviewFrame.BodyRect.BorderColor3 = ESPSettings.BoxColor
+		ESPPreviewFrame.BodyRect.Visible = ESPSettings.ShowBox
+	end
+	
+	if ESPPreviewFrame.LeftLeg then
+		ESPPreviewFrame.LeftLeg.BorderColor3 = ESPSettings.BoxColor
+		ESPPreviewFrame.LeftLeg.Visible = ESPSettings.ShowBox
+	end
+	
+	if ESPPreviewFrame.RightLeg then
+		ESPPreviewFrame.RightLeg.BorderColor3 = ESPSettings.BoxColor
+		ESPPreviewFrame.RightLeg.Visible = ESPSettings.ShowBox
+	end
+	
+	-- Update Name
+	if ESPPreviewFrame.NameLabel then
+		ESPPreviewFrame.NameLabel.TextColor3 = ESPSettings.NameColor
+		ESPPreviewFrame.NameLabel.Visible = ESPSettings.ShowName
+	end
+	
+	-- Update Distance
+	if ESPPreviewFrame.DistanceLabel then
+		ESPPreviewFrame.DistanceLabel.Visible = ESPSettings.ShowDistance
+	end
+	
+	-- Update Health Bar
+	if ESPPreviewFrame.HealthBar then
+		ESPPreviewFrame.HealthBar.BackgroundColor3 = ESPSettings.HealthBarColor
+		ESPPreviewFrame.HealthBar.Visible = ESPSettings.ShowHealth
+	end
+	
+	if ESPPreviewFrame.HealthBarBG then
+		ESPPreviewFrame.HealthBarBG.Visible = ESPSettings.ShowHealth
+	end
+	
+	if ESPPreviewFrame.HealthText then
+		ESPPreviewFrame.HealthText.Visible = ESPSettings.ShowHealth
+	end
 end
 
 -- ==================== ESP FUNCTIONS ====================
@@ -847,7 +887,9 @@ SaveManager:LoadAutoloadConfig()
 -- ==================== SECONDARY WINDOW FOR ESP PREVIEW ====================
 local SecondaryWindow = Library:CreateSecondaryWindow({
 	Title = 'ESP Preview';
-	Position = UDim2.fromOffset(680, 50);  -- Position next to main window
+	ParentWindow = Window;  -- Attach to main window
+	StickyMode = true;  -- Follow parent window
+	OffsetFromParent = Vector2.new(10, 0);  -- 10px gap to the right
 	Size = UDim2.fromOffset(280, 350);
 	Resizable = true;
 	MinSize = Vector2.new(250, 300);
@@ -1055,4 +1097,5 @@ ESPPreviewBox:AddToggle('AutoShowPreview', {
 
 ESPPreviewBox:AddDivider()
 
+ESPPreviewBox:AddLabel('📌 Sticky to main window', true)
 ESPPreviewBox:AddLabel('Press [End] to minimize/restore', true)

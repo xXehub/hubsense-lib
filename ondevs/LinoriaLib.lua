@@ -4125,27 +4125,56 @@ function Library:CreateSecondaryWindow(Config)
     Config = Config or {};
     
     if type(Config.Title) ~= 'string' then Config.Title = 'Secondary Window' end
-    if typeof(Config.Position) ~= 'UDim2' then Config.Position = UDim2.fromOffset(750, 50) end
     if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(300, 400) end
     if Config.MinimizeKey == nil then Config.MinimizeKey = true end
+    
+    -- Sticky mode: follows parent window
+    local ParentWindow = Config.ParentWindow;
+    local OffsetFromParent = Config.OffsetFromParent or Vector2.new(10, 0); -- Default: 10px to the right
+    local StickyMode = Config.StickyMode ~= false; -- Default: true
     
     local SecondaryWindow = {
         Visible = true;
         Minimized = false;
+        StickyMode = StickyMode;
+        ParentWindow = ParentWindow;
     };
+    
+    -- Calculate initial position based on parent
+    local InitialPosition;
+    if ParentWindow and StickyMode then
+        local ParentHolder = ParentWindow.Holder;
+        if ParentHolder then
+            -- Position to the right of parent window
+            InitialPosition = UDim2.new(
+                ParentHolder.Position.X.Scale,
+                ParentHolder.Position.X.Offset + ParentHolder.Size.X.Offset + OffsetFromParent.X,
+                ParentHolder.Position.Y.Scale,
+                ParentHolder.Position.Y.Offset + OffsetFromParent.Y
+            );
+        else
+            InitialPosition = Config.Position or UDim2.fromOffset(750, 50);
+        end;
+    else
+        InitialPosition = Config.Position or UDim2.fromOffset(750, 50);
+    end;
     
     -- Outer frame (black border)
     local Outer = Library:Create('Frame', {
         BackgroundColor3 = Color3.new(0, 0, 0);
         BorderSizePixel = 0;
-        Position = Config.Position;
+        Position = InitialPosition;
         Size = Config.Size;
         Visible = Config.AutoShow ~= false;
         ZIndex = 1;
         Parent = ScreenGui;
     });
     
-    Library:MakeDraggable(Outer, 25);
+    -- Only make draggable if NOT in sticky mode
+    if not StickyMode then
+        Library:MakeDraggable(Outer, 25);
+    end;
+    
     if Config.Resizable then
         Library:MakeResizable(Outer, Config.MinSize or Vector2.new(250, 200));
     end
@@ -4331,11 +4360,39 @@ function Library:CreateSecondaryWindow(Config)
         end));
     end;
     
+    -- Sticky mode: follow parent window position
+    if StickyMode and ParentWindow and ParentWindow.Holder then
+        local ParentHolder = ParentWindow.Holder;
+        
+        -- Update position when parent moves
+        local function UpdatePosition()
+            if not SecondaryWindow.Visible then return end;
+            if not ParentHolder or not ParentHolder.Parent then return end;
+            
+            Outer.Position = UDim2.new(
+                ParentHolder.Position.X.Scale,
+                ParentHolder.Position.X.Offset + ParentHolder.Size.X.Offset + OffsetFromParent.X,
+                ParentHolder.Position.Y.Scale,
+                ParentHolder.Position.Y.Offset + OffsetFromParent.Y
+            );
+        end;
+        
+        -- Connect to parent position changes
+        Library:GiveSignal(ParentHolder:GetPropertyChangedSignal('Position'):Connect(UpdatePosition));
+        
+        -- Also update on parent size change (in case window is resized)
+        Library:GiveSignal(ParentHolder:GetPropertyChangedSignal('Size'):Connect(UpdatePosition));
+        
+        -- Store update function for manual calls
+        SecondaryWindow.UpdatePosition = UpdatePosition;
+    end;
+    
     -- Store references
     SecondaryWindow.Holder = Outer;
     SecondaryWindow.Container = Container;
     SecondaryWindow.ContentInner = ContentInner;
     SecondaryWindow.ContentOuter = ContentOuter;
+    SecondaryWindow.OffsetFromParent = OffsetFromParent;
     
     return SecondaryWindow;
 end;
