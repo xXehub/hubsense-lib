@@ -479,22 +479,15 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
-        -- Determine if this is from a Toggle (has ToggleOuter wrapper) or a Label (directly in Container)
-        local ParentForColorPicker = ToggleLabel.Parent -- Default: ToggleInner
-        local IsToggle = false
+        -- Determine if this is from a Toggle or a Label
+        -- Label: ToggleLabel.Parent == Container (TextLabel directly in Container)
+        -- Toggle: ToggleLabel.Parent == ToggleInner, ToggleInner.Parent == ToggleOuter, ToggleOuter.Parent == Container
+        local IsToggle = ToggleLabel.Parent ~= Container
+        local ParentForColorPicker = ToggleLabel -- Default: use ToggleLabel (for Labels with UIListLayout)
         
-        if ParentForColorPicker.ClassName == 'Frame' and ParentForColorPicker.Parent then
-            local GrandParent = ParentForColorPicker.Parent
-            if GrandParent.ClassName == 'Frame' and GrandParent.Parent == Container then
-                -- This is a Toggle: ToggleLabel -> ToggleInner -> ToggleOuter -> Container
-                ParentForColorPicker = GrandParent -- Use ToggleOuter
-                IsToggle = true
-            end
-        end
-        
-        -- If not a toggle, it's a Label: ToggleLabel -> Container (TextLabel directly in Container)
-        if not IsToggle then
-            ParentForColorPicker = ToggleLabel -- Keep it in the label for UIListLayout to work
+        if IsToggle then
+            -- For Toggle, go up to ToggleOuter level
+            ParentForColorPicker = ToggleLabel.Parent.Parent -- ToggleInner.Parent = ToggleOuter
         end
 
         local DisplayFrame = Library:Create('Frame', {
