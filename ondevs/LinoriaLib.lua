@@ -457,7 +457,7 @@ do
 
     function Funcs:AddColorPicker(Idx, Info)
         local ToggleLabel = self.TextLabel;
-        -- local Container = self.Container;
+        local Container = self.Container;
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
 
@@ -484,10 +484,10 @@ do
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
             BorderMode = Enum.BorderMode.Inset;
             Size = UDim2.new(0, 28, 0, 14);
-            Position = UDim2.new(1, -28, 0.5, -7);
-            AnchorPoint = Vector2.new(1, 0.5);
+            Position = UDim2.new(1, -32, 0, 0);
+            AnchorPoint = Vector2.new(0, 0);
             ZIndex = 6;
-            Parent = ToggleLabel;
+            Parent = ToggleLabel.Parent;
         });
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
