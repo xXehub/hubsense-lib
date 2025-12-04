@@ -900,8 +900,8 @@ local SecondaryWindow = Library:CreateSecondaryWindow({
 task.wait(0.1)
 local mainAbsPos = Window.Holder.AbsolutePosition
 local mainAbsSize = Window.Holder.AbsoluteSize
--- Position right next to main window (1px gap)
-SecondaryWindow.Holder.Position = UDim2.fromOffset(mainAbsPos.X + mainAbsSize.X - 1, mainAbsPos.Y)
+-- Position right next to main window (8px gap)
+SecondaryWindow.Holder.Position = UDim2.fromOffset(mainAbsPos.X + mainAbsSize.X + 8, mainAbsPos.Y)
 
 -- DEBUG: Print actual positions
 print('[DEBUG] Main AbsolutePosition:', mainAbsPos)
@@ -913,7 +913,7 @@ local function UpdateSecondaryPosition()
 	if not SecondaryWindow or not SecondaryWindow.Holder or not SecondaryWindow.Holder.Parent then return end
 	local currentMainPos = Window.Holder.AbsolutePosition
 	local currentMainSize = Window.Holder.AbsoluteSize
-	SecondaryWindow.Holder.Position = UDim2.fromOffset(currentMainPos.X + currentMainSize.X - 1, currentMainPos.Y)
+	SecondaryWindow.Holder.Position = UDim2.fromOffset(currentMainPos.X + currentMainSize.X + 8, currentMainPos.Y)
 end
 
 -- Connect to main window position changes
