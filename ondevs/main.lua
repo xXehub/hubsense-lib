@@ -24,6 +24,7 @@ local currentSearchResults = {}
 local ESPEnabled = false
 local ESPConnections = {}
 local ESPObjects = {}
+local ESPPreviewFrame = nil
 local ESPSettings = {
 	ShowName = true,
 	ShowDistance = true,
@@ -68,16 +69,25 @@ local function LoadWords()
 					table.insert(WordDictionary[firstLetter], wordLower)
 				end
 			end
-			loaded = true
+			print('[Words] Loaded ' .. #Words .. ' words')
 			return true
+		else
+			warn('[Words] Failed to get response body')
+			return false
 		end
 	end)
 	
-	loaded = true
+	if success and result then
+		loaded = true
+	else
+		warn('[Words] Load failed:', result)
+		loaded = true -- Set true anyway to prevent infinite retry
+	end
 end
 
 -- Reload Words with new filter
 local function ReloadWords()
+	print('[ReloadWords] Starting reload...')
 	Words = {}
 	WordDictionary = {}
 	searchCache = {}
@@ -87,9 +97,13 @@ local function ReloadWords()
 	
 	spawn(function()
 		LoadWords()
-		while not loaded do
+		local maxWait = 50 -- 5 seconds max
+		local waited = 0
+		while not loaded and waited < maxWait do
 			wait(0.1)
+			waited = waited + 1
 		end
+		print('[ReloadWords] Completed. Words loaded:', #Words)
 		if StatusLabel then
 			StatusLabel:SetText('✅ Words Loaded: ' .. #Words)
 		end
@@ -162,6 +176,195 @@ end
 
 -- Start loading words in background
 spawn(LoadWords)
+
+-- ==================== ESP PREVIEW FUNCTIONS ====================
+local function CreateESPPreview()
+	if ESPPreviewFrame then 
+		print('[ESP Preview] Already exists, skipping creation')
+		return 
+	end
+	
+	print('[ESP Preview] Starting creation...')
+	
+	-- Wait for ScreenGui to be available
+	local ScreenGui
+	for i = 1, 10 do
+		ScreenGui = game:GetService('CoreGui'):FindFirstChild('LinoriaGui')
+		if not ScreenGui then
+			ScreenGui = game.Players.LocalPlayer.PlayerGui:FindFirstChild('LinoriaGui')
+		end
+		if ScreenGui then 
+			print('[ESP Preview] Found ScreenGui:', ScreenGui:GetFullName())
+			break 
+		end
+		print('[ESP Preview] Waiting for ScreenGui... Attempt', i)
+		wait(0.1)
+	end
+	
+	if not ScreenGui then 
+		warn('[ESP Preview] ScreenGui not found after 10 attempts')
+		-- Try to use any ScreenGui as fallback
+		ScreenGui = game:GetService('CoreGui'):FindFirstChildOfClass('ScreenGui')
+		if ScreenGui then
+			warn('[ESP Preview] Using fallback ScreenGui:', ScreenGui.Name)
+		else
+			warn('[ESP Preview] No ScreenGui available at all')
+			return 
+		end
+	end
+	
+	-- Main Preview Frame
+	local PreviewFrame = Instance.new('Frame')
+	PreviewFrame.Name = 'ESPPreview'
+	PreviewFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+	PreviewFrame.BorderColor3 = Color3.fromRGB(40, 40, 40)
+	PreviewFrame.BorderSizePixel = 1
+	PreviewFrame.AnchorPoint = Vector2.new(1, 0)
+	PreviewFrame.Position = UDim2.new(1, -10, 0, 50)
+	PreviewFrame.Size = UDim2.new(0, 230, 0, 320)
+	PreviewFrame.ZIndex = 100
+	PreviewFrame.Parent = ScreenGui
+	
+	-- Header
+	local Header = Instance.new('Frame')
+	Header.Name = 'Header'
+	Header.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+	Header.BorderSizePixel = 0
+	Header.Size = UDim2.new(1, 0, 0, 25)
+	Header.ZIndex = 101
+	Header.Parent = PreviewFrame
+	
+	local HeaderLabel = Instance.new('TextLabel')
+	HeaderLabel.BackgroundTransparency = 1
+	HeaderLabel.Size = UDim2.new(1, -35, 1, 0)
+	HeaderLabel.Position = UDim2.new(0, 10, 0, 0)
+	HeaderLabel.Font = Enum.Font.Code
+	HeaderLabel.Text = 'ESP Preview'
+	HeaderLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	HeaderLabel.TextSize = 14
+	HeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
+	HeaderLabel.ZIndex = 102
+	HeaderLabel.Parent = Header
+	
+	local CloseButton = Instance.new('TextButton')
+	CloseButton.BackgroundTransparency = 1
+	CloseButton.Position = UDim2.new(1, -25, 0, 0)
+	CloseButton.Size = UDim2.new(0, 25, 0, 25)
+	CloseButton.Font = Enum.Font.Code
+	CloseButton.Text = 'X'
+	CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	CloseButton.TextSize = 14
+	CloseButton.ZIndex = 102
+	CloseButton.Parent = Header
+	
+	CloseButton.MouseButton1Click:Connect(function()
+		PreviewFrame.Visible = false
+	end)
+	
+	-- Content Frame (White background for preview)
+	local ContentFrame = Instance.new('Frame')
+	ContentFrame.Name = 'Content'
+	ContentFrame.BackgroundColor3 = Color3.fromRGB(245, 245, 245)
+	ContentFrame.BorderSizePixel = 0
+	ContentFrame.Position = UDim2.new(0, 10, 0, 35)
+	ContentFrame.Size = UDim2.new(1, -20, 0, 200)
+	ContentFrame.ZIndex = 101
+	ContentFrame.Parent = PreviewFrame
+	
+	-- Player Box Preview (simulated)
+	local PlayerBox = Instance.new('Frame')
+	PlayerBox.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+	PlayerBox.BorderColor3 = ESPSettings.BoxColor
+	PlayerBox.BorderSizePixel = 2
+	PlayerBox.Position = UDim2.new(0.5, -30, 0.5, -40)
+	PlayerBox.Size = UDim2.new(0, 60, 0, 80)
+	PlayerBox.ZIndex = 102
+	PlayerBox.Parent = ContentFrame
+	
+	-- Player Name Label (above box)
+	local NameLabel = Instance.new('TextLabel')
+	NameLabel.BackgroundTransparency = 1
+	NameLabel.Position = UDim2.new(0.5, -50, 0, 10)
+	NameLabel.Size = UDim2.new(0, 100, 0, 20)
+	NameLabel.Font = Enum.Font.SourceSansBold
+	NameLabel.Text = 'Username'
+	NameLabel.TextColor3 = ESPSettings.NameColor
+	NameLabel.TextSize = 14
+	NameLabel.TextStrokeTransparency = 0.5
+	NameLabel.ZIndex = 103
+	NameLabel.Parent = ContentFrame
+	
+	-- Distance Label (below box)
+	local DistanceLabel = Instance.new('TextLabel')
+	DistanceLabel.BackgroundTransparency = 1
+	DistanceLabel.Position = UDim2.new(0.5, -50, 1, -30)
+	DistanceLabel.Size = UDim2.new(0, 100, 0, 20)
+	DistanceLabel.Font = Enum.Font.SourceSans
+	DistanceLabel.Text = '25m'
+	DistanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+	DistanceLabel.TextSize = 13
+	DistanceLabel.TextStrokeTransparency = 0.5
+	DistanceLabel.ZIndex = 103
+	DistanceLabel.Parent = ContentFrame
+	
+	-- Info Section
+	local InfoFrame = Instance.new('Frame')
+	InfoFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	InfoFrame.BorderSizePixel = 0
+	InfoFrame.Position = UDim2.new(0, 10, 0, 245)
+	InfoFrame.Size = UDim2.new(1, -20, 0, 60)
+	InfoFrame.ZIndex = 101
+	InfoFrame.Parent = PreviewFrame
+	
+	local WeaponLabel = Instance.new('TextLabel')
+	WeaponLabel.BackgroundTransparency = 1
+	WeaponLabel.Position = UDim2.new(0, 10, 0, 5)
+	WeaponLabel.Size = UDim2.new(1, -20, 0, 20)
+	WeaponLabel.Font = Enum.Font.Code
+	WeaponLabel.Text = 'Weapon'
+	WeaponLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+	WeaponLabel.TextSize = 12
+	WeaponLabel.TextXAlignment = Enum.TextXAlignment.Center
+	WeaponLabel.ZIndex = 102
+	WeaponLabel.Parent = InfoFrame
+	
+	-- Store references
+	ESPPreviewFrame = {
+		Main = PreviewFrame,
+		PlayerBox = PlayerBox,
+		NameLabel = NameLabel,
+		DistanceLabel = DistanceLabel,
+		ContentFrame = ContentFrame
+	}
+	
+	print('[ESP Preview] Created successfully at position:', PreviewFrame.Position)
+end
+
+local function RemoveESPPreview()
+	if ESPPreviewFrame and ESPPreviewFrame.Main then
+		ESPPreviewFrame.Main:Destroy()
+		ESPPreviewFrame = nil
+	end
+end
+
+local function UpdateESPPreview()
+	if not ESPPreviewFrame then return end
+	
+	-- Update colors based on settings
+	if ESPPreviewFrame.PlayerBox then
+		ESPPreviewFrame.PlayerBox.BorderColor3 = ESPSettings.BoxColor
+		ESPPreviewFrame.PlayerBox.Visible = ESPSettings.ShowBox
+	end
+	
+	if ESPPreviewFrame.NameLabel then
+		ESPPreviewFrame.NameLabel.TextColor3 = ESPSettings.NameColor
+		ESPPreviewFrame.NameLabel.Visible = ESPSettings.ShowName
+	end
+	
+	if ESPPreviewFrame.DistanceLabel then
+		ESPPreviewFrame.DistanceLabel.Visible = ESPSettings.ShowDistance
+	end
+end
 
 -- ==================== ESP FUNCTIONS ====================
 local function CreateESP(player)
@@ -382,32 +585,7 @@ ResultsBox:AddDivider()
 -- Pagination info and controls at bottom
 local PageInfoLabel = ResultsBox:AddLabel('Page: 1 / 1 | Total: 0 words', true)
 
-ResultsBox:AddButton({
-	Text = 'Prev',
-	DoubleClick = false,
-	Tooltip = 'Go to previous page',
-	Func = function()
-		if #currentSearchResults > 0 and currentPage > 1 then
-			currentPage = currentPage - 1
-			UpdateResultsDisplay()
-		end
-	end
-}):AddButton({
-	Text = 'Next',
-	DoubleClick = false,
-	Tooltip = 'Go to next page',
-	Func = function()
-		if #currentSearchResults > 0 then
-			local totalPages = math.ceil(#currentSearchResults / wordsPerPage)
-			if currentPage < totalPages then
-				currentPage = currentPage + 1
-				UpdateResultsDisplay()
-			end
-		end
-	end
-})
-
--- Update results display function (define before use)
+-- Update results display function (DEFINE BEFORE BUTTONS)
 local function UpdateResultsDisplay()
 	local startIndex = (currentPage - 1) * wordsPerPage + 1
 	local endIndex = math.min(currentPage * wordsPerPage, #currentSearchResults)
@@ -434,6 +612,32 @@ local function UpdateResultsDisplay()
 	local totalPages = math.ceil(#currentSearchResults / wordsPerPage)
 	PageInfoLabel:SetText('Page: ' .. currentPage .. ' / ' .. totalPages .. ' | Total: ' .. #currentSearchResults .. ' words')
 end
+
+-- Add pagination buttons after function definition
+ResultsBox:AddButton({
+	Text = 'Prev',
+	DoubleClick = false,
+	Tooltip = 'Go to previous page',
+	Func = function()
+		if #currentSearchResults > 0 and currentPage > 1 then
+			currentPage = currentPage - 1
+			UpdateResultsDisplay()
+		end
+	end
+}):AddButton({
+	Text = 'Next',
+	DoubleClick = false,
+	Tooltip = 'Go to next page',
+	Func = function()
+		if #currentSearchResults > 0 then
+			local totalPages = math.ceil(#currentSearchResults / wordsPerPage)
+			if currentPage < totalPages then
+				currentPage = currentPage + 1
+				UpdateResultsDisplay()
+			end
+		end
+	end
+})
 
 -- Search Input
 WordTab:AddInput('SearchInput', {
@@ -648,6 +852,7 @@ ESPBox:AddToggle('ShowName', {
 	Tooltip = 'Display player names',
 	Callback = function(Value)
 		ESPSettings.ShowName = Value
+		UpdateESPPreview()
 	end
 })
 
@@ -657,6 +862,7 @@ ESPBox:AddToggle('ShowDistance', {
 	Tooltip = 'Display distance to players',
 	Callback = function(Value)
 		ESPSettings.ShowDistance = Value
+		UpdateESPPreview()
 	end
 })
 
@@ -666,6 +872,7 @@ ESPBox:AddToggle('ShowBox', {
 	Tooltip = 'Display box around players',
 	Callback = function(Value)
 		ESPSettings.ShowBox = Value
+		UpdateESPPreview()
 	end
 })
 
@@ -699,6 +906,7 @@ ESPColorsBox:AddLabel('Name Color:'):AddColorPicker('NameColor', {
 	Title = 'Name Color',
 	Callback = function(Value)
 		ESPSettings.NameColor = Value
+		UpdateESPPreview()
 	end
 })
 
@@ -707,6 +915,7 @@ ESPColorsBox:AddLabel('Box Color:'):AddColorPicker('BoxColor', {
 	Title = 'Box Color',
 	Callback = function(Value)
 		ESPSettings.BoxColor = Value
+		UpdateESPPreview()
 	end
 })
 
@@ -788,3 +997,9 @@ ThemeManager:ApplyToTab(Tabs['Configuration'])
 ThemeManager:ApplyTheme('Default')
 
 SaveManager:LoadAutoloadConfig()
+
+-- Create ESP Preview after everything is loaded
+spawn(function()
+	wait(1) -- Wait for complete initialization
+	CreateESPPreview()
+end)
