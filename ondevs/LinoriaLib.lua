@@ -1914,7 +1914,7 @@ do
 
         Library:Create('UIPadding', {
             PaddingLeft = UDim.new(0, 18);
-            PaddingRight = UDim.new(0, 4);
+            PaddingRight = UDim.new(0, 0);
             Parent = ToggleLabel;
         });
 
