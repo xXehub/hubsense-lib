@@ -1097,6 +1097,13 @@ ESPBox:AddToggle('ShowName', {
 		ESPSettings.ShowName = Value
 		UpdateESPPreview()
 	end
+}):AddColorPicker('NameColor', {
+	Default = Color3.fromRGB(255, 255, 255),
+	Title = 'Name Color',
+	Callback = function(Value)
+		ESPSettings.NameColor = Value
+		UpdateESPPreview()
+	end
 })
 
 ESPBox:AddToggle('ShowDistance', {
@@ -1105,6 +1112,13 @@ ESPBox:AddToggle('ShowDistance', {
 	Tooltip = 'Display distance to players',
 	Callback = function(Value)
 		ESPSettings.ShowDistance = Value
+		UpdateESPPreview()
+	end
+}):AddColorPicker('DistanceColor', {
+	Default = Color3.fromRGB(180, 180, 180),
+	Title = 'Distance Color',
+	Callback = function(Value)
+		ESPSettings.DistanceColor = Value
 		UpdateESPPreview()
 	end
 })
@@ -1127,6 +1141,13 @@ ESPBox:AddToggle('ShowHealth', {
 		ESPSettings.ShowHealth = Value
 		UpdateESPPreview()
 	end
+}):AddColorPicker('HealthBarColor', {
+	Default = Color3.fromRGB(0, 255, 0),
+	Title = 'Health Bar Color',
+	Callback = function(Value)
+		ESPSettings.HealthBarColor = Value
+		UpdateESPPreview()
+	end
 })
 
 ESPBox:AddToggle('BoxESP', {
@@ -1135,6 +1156,13 @@ ESPBox:AddToggle('BoxESP', {
 	Tooltip = 'Display box outline around players',
 	Callback = function(Value)
 		ESPSettings.BoxESP = Value
+		UpdateESPPreview()
+	end
+}):AddColorPicker('BoxColor', {
+	Default = Color3.fromRGB(255, 0, 0),
+	Title = 'Box Color',
+	Callback = function(Value)
+		ESPSettings.BoxColor = Value
 		UpdateESPPreview()
 	end
 })
@@ -1150,6 +1178,16 @@ ESPBox:AddToggle('SkeletonESP', {
 		end
 		UpdateESPPreview()
 	end
+}):AddColorPicker('SkeletonColor', {
+	Default = Color3.fromRGB(255, 255, 255),
+	Title = 'Skeleton Color',
+	Callback = function(Value)
+		ESPSettings.SkeletonColor = Value
+		if ESPPreviewFrame and ESPPreviewFrame.UpdateSkeleton then
+			ESPPreviewFrame.UpdateSkeleton()
+		end
+		UpdateESPPreview()
+	end
 })
 
 ESPBox:AddToggle('ChamsESP', {
@@ -1158,6 +1196,14 @@ ESPBox:AddToggle('ChamsESP', {
 	Tooltip = 'Highlight player body parts in 3D',
 	Callback = function(Value)
 		ESPSettings.ChamsESP = Value
+		UpdateESPPreview()
+	end
+}):AddColorPicker('ChamsColor', {
+	Default = Color3.fromRGB(255, 120, 0),
+	Title = 'Chams Color',
+	Transparency = 0.3,
+	Callback = function(Value)
+		ESPSettings.ChamsColor = Value
 		UpdateESPPreview()
 	end
 })
@@ -1285,75 +1331,6 @@ ESPBox:AddToggle('AutoShowPreview', {
 	Tooltip = 'Auto show preview on start',
 	Callback = function(Value)
 		-- Save preference
-	end
-})
-
-local ESPColorsBox = Tabs.Visual:AddRightGroupbox('ESP Colors')
-
-ESPColorsBox:AddLabel('Name Color:'):AddColorPicker('NameColor', {
-	Default = Color3.fromRGB(255, 255, 255),
-	Title = 'Name Color',
-	Callback = function(Value)
-		ESPSettings.NameColor = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPColorsBox:AddLabel('Distance Color:'):AddColorPicker('DistanceColor', {
-	Default = Color3.fromRGB(180, 180, 180),
-	Title = 'Distance Color',
-	Callback = function(Value)
-		ESPSettings.DistanceColor = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPColorsBox:AddLabel('Box Color:'):AddColorPicker('BoxColor', {
-	Default = Color3.fromRGB(255, 0, 0),
-	Title = 'Box Color',
-	Callback = function(Value)
-		ESPSettings.BoxColor = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPColorsBox:AddLabel('Tracer Color:'):AddColorPicker('TracerColor', {
-	Default = Color3.fromRGB(255, 255, 255),
-	Title = 'Tracer Color',
-	Callback = function(Value)
-		ESPSettings.TracerColor = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPColorsBox:AddLabel('Health Bar Color:'):AddColorPicker('HealthBarColor', {
-	Default = Color3.fromRGB(0, 255, 0),
-	Title = 'Health Bar Color',
-	Callback = function(Value)
-		ESPSettings.HealthBarColor = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPColorsBox:AddLabel('Skeleton Color:'):AddColorPicker('SkeletonColor', {
-	Default = Color3.fromRGB(255, 255, 255),
-	Title = 'Skeleton Color',
-	Callback = function(Value)
-		ESPSettings.SkeletonColor = Value
-		if ESPPreviewFrame and ESPPreviewFrame.UpdateSkeleton then
-			ESPPreviewFrame.UpdateSkeleton()  -- Rebuild skeleton with new color
-		end
-		UpdateESPPreview()
-	end
-})
-
-ESPColorsBox:AddLabel('Chams Color:'):AddColorPicker('ChamsColor', {
-	Default = Color3.fromRGB(255, 120, 0),
-	Title = 'Chams Highlight Color',
-	Transparency = 0.3,
-	Callback = function(Value)
-		ESPSettings.ChamsColor = Value
-		UpdateESPPreview()
 	end
 })
 
