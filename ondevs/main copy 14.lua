@@ -25,7 +25,6 @@ local ESPEnabled = false
 local ESPConnections = {}
 local ESPObjects = {}
 local ESPPreviewFrame = nil
-local DynamicESPConnection = nil -- Connection for ESP preview update loop
 local SimulatedDistance = 150 -- Simulated distance in studs for ESP preview scaling
 local ESPSettings = {
 	ShowName = true,
@@ -34,8 +33,6 @@ local ESPSettings = {
 	ShowBox = true,
 	BoxESP = false,
 	SkeletonESP = false,
-	ChamsESP = false,
-	FilledBox = false,
 	MaxDistance = 1000,
 	TeamCheck = false,
 	NameColor = Color3.fromRGB(255, 255, 255),
@@ -43,10 +40,7 @@ local ESPSettings = {
 	HealthBarColor = Color3.fromRGB(0, 255, 0),
 	SkeletonColor = Color3.fromRGB(255, 255, 255),
 	DistanceColor = Color3.fromRGB(180, 180, 180),
-	TracerColor = Color3.fromRGB(255, 255, 255),
-	ChamsColor = Color3.fromRGB(255, 120, 0),
-	ChamsTransparency = 0.3,
-	FilledBoxTransparency = 0.2
+	TracerColor = Color3.fromRGB(255, 255, 255)
 }
 
 -- Load Words Function
@@ -201,9 +195,8 @@ local PartMap = {} -- Global part mapping for rotation
 local function UpdateCameraZoom(distance)
 	CameraDistance = math.clamp(distance, MinZoom, MaxZoom)
 	if ViewportCamera then
-		-- Camera positioned to view full body (focus on chest area, Y=2)
-		ViewportCamera.CFrame = CFrame.new(0, 2, CameraDistance)
-		ViewportCamera.Focus = CFrame.new(0, 2, 0)
+		ViewportCamera.CFrame = CFrame.new(0, 1, CameraDistance)
+		ViewportCamera.Focus = CFrame.new(0, 1, 0)
 		print('[ESP Preview] Zoom updated:', CameraDistance)
 	end
 end
@@ -219,15 +212,9 @@ local function RotateCharacter(angleDegrees)
 	if not originalHRP then return end
 	
 	CurrentRotation = angleDegrees % 360
+	local targetCFrame = CFrame.new(0, 0, 0) * CFrame.Angles(0, math.rad(CurrentRotation), 0)
 	
-	-- Calculate proper Y offset based on rig type
-	local rigType = char:FindFirstChild('Torso') and 'R6' or 'R15'
-	local heightOffset = rigType == 'R6' and 2.5 or 2.8
-	
-	-- Target position: centered at origin with heightOffset, rotated
-	local targetCFrame = CFrame.new(0, heightOffset, 0) * CFrame.Angles(0, math.rad(CurrentRotation), 0)
-	
-	-- Rotate all parts around center point
+	-- Rotate all parts using stored PartMap
 	for originalPart, clonedPart in pairs(PartMap) do
 		if clonedPart and clonedPart.Parent and originalPart and originalPart.Parent then
 			pcall(function()
@@ -261,31 +248,21 @@ local function UpdateESPPreview()
 		end
 	end
 	
-	-- Update Filled Box
-	if ESPPreviewFrame.BoxFill then
-		ESPPreviewFrame.BoxFill.Visible = ESPSettings.FilledBox == true
-		ESPPreviewFrame.BoxFill.BackgroundColor3 = ESPSettings.BoxColor or Color3.fromRGB(255, 0, 0)
-		ESPPreviewFrame.BoxFill.BackgroundTransparency = ESPSettings.FilledBoxTransparency or 0.2
-	end
-	
-	-- Update Chams Highlight
-	if ChamsHighlight then
-		ChamsHighlight.Enabled = ESPSettings.ChamsESP == true
-		ChamsHighlight.FillColor = ESPSettings.ChamsColor or Color3.fromRGB(255, 120, 0)
-		ChamsHighlight.FillTransparency = ESPSettings.ChamsTransparency or 0.3
-	end
-	
-	-- Update Skeleton ESP visibility and colors (Universal R6/R15)
+	-- Update Skeleton ESP visibility and colors (R6)
 	local skeletonVisible = ESPSettings.SkeletonESP == true
 	local skeletonColor = ESPSettings.SkeletonColor or Color3.fromRGB(255, 255, 255)
 	
-	-- Update all skeleton lines (works with dynamic skeleton system)
-	if ESPPreviewFrame.SkeletonLines then
-		for _, line in ipairs(ESPPreviewFrame.SkeletonLines) do
-			if line and line.Parent then
-				line.Visible = skeletonVisible
-				line.BackgroundColor3 = skeletonColor
-			end
+	-- Update all skeleton lines
+	local skeletonParts = {
+		'HeadToTorso', 'TorsoToLeftArm', 'TorsoToRightArm',
+		'LeftArmLine', 'RightArmLine', 'TorsoToLeftLeg',
+		'TorsoToRightLeg', 'LeftLegLine', 'RightLegLine'
+	}
+	
+	for _, partName in ipairs(skeletonParts) do
+		if ESPPreviewFrame[partName] then
+			ESPPreviewFrame[partName].Visible = skeletonVisible
+			ESPPreviewFrame[partName].BackgroundColor3 = skeletonColor
 		end
 	end
 	
@@ -311,11 +288,6 @@ local function UpdateESPPreview()
 		if healthVisible then
 			ESPPreviewFrame.HealthBar.BackgroundColor3 = ESPSettings.HealthBarColor or Color3.fromRGB(0, 255, 0)
 		end
-	end
-	
-	-- Refresh skeleton if toggled
-	if skeletonVisible and UpdateSkeletonPreview then
-		UpdateSkeletonPreview()
 	end
 end
 
@@ -364,7 +336,6 @@ local function CreateESP(player)
 		-- 2D Box
 		BoxOutline = Drawing.new('Square'),
 		Box = Drawing.new('Square'),
-		BoxFilled = Drawing.new('Square'),  -- Filled box
 		
 		-- Tracer
 		Tracer = Drawing.new('Line'),
@@ -383,10 +354,7 @@ local function CreateESP(player)
 		HeadDot = Drawing.new('Circle'),
 		
 		-- Skeleton lines
-		Skeleton = {},
-		
-		-- Chams (3D Highlight)
-		Chams = nil  -- Will be created if character exists
+		Skeleton = {}
 	}
 	
 	-- Initialize skeleton lines
@@ -454,25 +422,6 @@ local function CreateESP(player)
 		espObj.Skeleton[i].Color = ESPSettings.SkeletonColor
 		espObj.Skeleton[i].Transparency = 1
 	end
-	
-	-- Set default properties for filled box
-	espObj.BoxFilled.Filled = true
-	espObj.BoxFilled.Color = ESPSettings.BoxColor
-	espObj.BoxFilled.Transparency = 1 - ESPSettings.FilledBoxTransparency
-	
-	-- Create Chams (Highlight) for 3D character
-	if char then
-		local highlight = Instance.new('Highlight')
-		highlight.Name = 'ESPChams'
-		highlight.Adornee = char
-		highlight.FillColor = ESPSettings.ChamsColor
-		highlight.FillTransparency = ESPSettings.ChamsTransparency
-		highlight.OutlineColor = Color3.fromRGB(0, 0, 0)
-		highlight.OutlineTransparency = 0.5
-		highlight.Enabled = ESPSettings.ChamsESP
-		highlight.Parent = char
-		espObj.Chams = highlight
-	end
 end
 
 local function RemoveESP(player)
@@ -482,7 +431,6 @@ local function RemoveESP(player)
 		
 		if espObj.Box then espObj.Box:Remove() end
 		if espObj.BoxOutline then espObj.BoxOutline:Remove() end
-		if espObj.BoxFilled then espObj.BoxFilled:Remove() end
 		if espObj.Tracer then espObj.Tracer:Remove() end
 		if espObj.NameText then espObj.NameText:Remove() end
 		if espObj.DistanceText then espObj.DistanceText:Remove() end
@@ -491,12 +439,6 @@ local function RemoveESP(player)
 		if espObj.HealthBarOutline then espObj.HealthBarOutline:Remove() end
 		if espObj.HeadDot then espObj.HeadDot:Remove() end
 		if espObj.HeadDotOutline then espObj.HeadDotOutline:Remove() end
-		
-		-- Remove Chams (Highlight)
-		if espObj.Chams then
-			espObj.Chams:Destroy()
-			espObj.Chams = nil
-		end
 		
 		if espObj.Skeleton then
 			for i = 1, 6 do
@@ -553,26 +495,6 @@ local function UpdateESP()
 				else
 					espObj.BoxOutline.Visible = false
 					espObj.Box.Visible = false
-				end
-				
-				-- Update Filled Box
-				if ESPSettings.FilledBox then
-					espObj.BoxFilled.Visible = true
-					espObj.BoxFilled.Position = boxPosition
-					espObj.BoxFilled.Size = boxSize
-					espObj.BoxFilled.Color = ESPSettings.BoxColor
-					espObj.BoxFilled.Transparency = 1 - ESPSettings.FilledBoxTransparency
-				else
-					espObj.BoxFilled.Visible = false
-				end
-				
-				-- Update Chams (Highlight)
-				if ESPSettings.ChamsESP and espObj.Chams then
-					espObj.Chams.Enabled = true
-					espObj.Chams.FillColor = ESPSettings.ChamsColor
-					espObj.Chams.FillTransparency = ESPSettings.ChamsTransparency
-				elseif espObj.Chams then
-					espObj.Chams.Enabled = false
 				end
 				
 				-- Update Tracer
@@ -710,8 +632,6 @@ local function UpdateESP()
 				-- Hide all ESP elements
 				if espObj.Box then espObj.Box.Visible = false end
 				if espObj.BoxOutline then espObj.BoxOutline.Visible = false end
-				if espObj.BoxFilled then espObj.BoxFilled.Visible = false end
-				if espObj.Chams then espObj.Chams.Enabled = false end
 				if espObj.Tracer then espObj.Tracer.Visible = false end
 				if espObj.NameText then espObj.NameText.Visible = false end
 				if espObj.DistanceText then espObj.DistanceText.Visible = false end
@@ -1145,29 +1065,6 @@ ESPBox:AddToggle('SkeletonESP', {
 	Tooltip = 'Display skeleton bones',
 	Callback = function(Value)
 		ESPSettings.SkeletonESP = Value
-		if ESPPreviewFrame and ESPPreviewFrame.UpdateSkeleton then
-			ESPPreviewFrame.UpdateSkeleton()  -- Rebuild skeleton with new visibility
-		end
-		UpdateESPPreview()
-	end
-})
-
-ESPBox:AddToggle('ChamsESP', {
-	Text = 'Chams (3D Highlight)',
-	Default = false,
-	Tooltip = 'Highlight player body parts in 3D',
-	Callback = function(Value)
-		ESPSettings.ChamsESP = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPBox:AddToggle('FilledBox', {
-	Text = 'Filled Box',
-	Default = false,
-	Tooltip = 'Fill box background with transparent color',
-	Callback = function(Value)
-		ESPSettings.FilledBox = Value
 		UpdateESPPreview()
 	end
 })
@@ -1340,19 +1237,6 @@ ESPColorsBox:AddLabel('Skeleton Color:'):AddColorPicker('SkeletonColor', {
 	Title = 'Skeleton Color',
 	Callback = function(Value)
 		ESPSettings.SkeletonColor = Value
-		if ESPPreviewFrame and ESPPreviewFrame.UpdateSkeleton then
-			ESPPreviewFrame.UpdateSkeleton()  -- Rebuild skeleton with new color
-		end
-		UpdateESPPreview()
-	end
-})
-
-ESPColorsBox:AddLabel('Chams Color:'):AddColorPicker('ChamsColor', {
-	Default = Color3.fromRGB(255, 120, 0),
-	Title = 'Chams Highlight Color',
-	Transparency = 0.3,
-	Callback = function(Value)
-		ESPSettings.ChamsColor = Value
 		UpdateESPPreview()
 	end
 })
@@ -1366,34 +1250,6 @@ MenuGroup:AddButton({
 	Tooltip = 'Unload the entire UI (double click)',
 	Func = function()
 		Library:Unload()
-	end
-})
-
-MenuGroup:AddButton({
-	Text = '🗑️ Unload Script',
-	DoubleClick = true,
-	Tooltip = 'Disconnect all ESP connections and cleanup (double click)',
-	Func = function()
-		-- Disconnect ESP connections
-		for _, connection in pairs(ESPConnections) do
-			if connection then
-				connection:Disconnect()
-			end
-		end
-		ESPConnections = {}
-		
-		-- Remove all ESP objects
-		for player, _ in pairs(ESPObjects) do
-			RemoveESP(player)
-		end
-		
-		-- Disconnect dynamic ESP connection
-		if DynamicESPConnection then
-			DynamicESPConnection:Disconnect()
-			DynamicESPConnection = nil
-		end
-		
-		print('Script unloaded - all connections disconnected')
 	end
 })
 
@@ -1439,15 +1295,6 @@ local WatermarkConnection = game:GetService('RunService').RenderStepped:Connect(
 end)
 
 Library.KeybindFrame.Visible = true
-
--- Connect ESP preview visibility to main window (handles both manual visibility changes AND Library:Toggle())
-if SecondaryWindow then
-	Window.Holder:GetPropertyChangedSignal('Visible'):Connect(function()
-		if SecondaryWindow.Holder then
-			SecondaryWindow.Holder.Visible = Window.Holder.Visible
-		end
-	end)
-end
 
 Library:OnUnload(function()
 	WatermarkConnection:Disconnect()
@@ -1548,8 +1395,8 @@ Library:AddToRegistry(ContentFrame, {
 	BackgroundColor3 = 'MainColor';
 })
 
--- ===== 3D VIEWPORT AVATAR (User's Real Character) =====
-print('[ESP Preview] Creating 3D Viewport Container...')
+-- ===== 2D ESP PREVIEW (Redesigned - Clean & Professional) =====
+print('[ESP Preview] Creating 2D Preview Container...')
 
 -- Main preview container (dark background)
 local PreviewContainer = Library:Create('Frame', {
@@ -1563,119 +1410,109 @@ local PreviewContainer = Library:Create('Frame', {
 	Parent = ContentFrame;
 })
 
--- 3D ViewportFrame (centered)
-local ViewportFrame = Instance.new('ViewportFrame')
-ViewportFrame.BackgroundTransparency = 1
-ViewportFrame.Size = UDim2.new(1, 0, 1, 0)
-ViewportFrame.Position = UDim2.new(0, 0, 0, 0)
-ViewportFrame.ZIndex = 8
-ViewportFrame.Parent = PreviewContainer
-ViewportFrame.Ambient = Color3.fromRGB(255, 255, 255)
-ViewportFrame.LightColor = Color3.fromRGB(255, 255, 255)
+-- Dummy Avatar Container (centered, proper R6 proportions untuk lebih compact)
+local DummyContainer = Library:Create('Frame', {
+	BackgroundTransparency = 1;
+	Size = UDim2.new(0, 80, 0, 160);  -- R6 proportions (lebih compact)
+	Position = UDim2.new(0.5, -40, 0.5, -80);  -- Perfect centered
+	AnchorPoint = Vector2.new(0, 0);
+	ZIndex = 8;
+	Parent = PreviewContainer;
+})
 
--- Create camera for viewport
-ViewportCamera = Instance.new('Camera')
-ViewportCamera.Parent = ViewportFrame
-ViewportFrame.CurrentCamera = ViewportCamera
-ViewportCamera.CFrame = CFrame.new(0, 2, 4) -- Position to see full body (chest level)
-ViewportCamera.Focus = CFrame.new(0, 2, 0)
+-- R6 Dummy Avatar Parts (Clean Roblox style)
+-- Head (proper R6 size)
+local DummyHead = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(163, 162, 165);  -- Roblox gray
+	BorderSizePixel = 0;
+	Size = UDim2.new(0, 28, 0, 28);  -- R6 head size
+	Position = UDim2.new(0.5, -14, 0, 0);
+	ZIndex = 10;
+	Parent = DummyContainer;
+})
 
--- Clone player's character into viewport
-local function CreateCharacterModel()
-	local player = game.Players.LocalPlayer
-	local character = player.Character
-	
-	if not character then
-		warn('[ESP Preview] Character not found, waiting...')
-		character = player.CharacterAdded:Wait()
-	end
-	
-	-- Clear old model
-	if CharacterModel then
-		CharacterModel:Destroy()
-		PartMap = {}
-	end
-	
-	-- Clone character
-	CharacterModel = Instance.new('Model')
-	CharacterModel.Name = 'PreviewCharacter'
-	CharacterModel.Parent = ViewportFrame
-	
-	PartMap = {} -- Reset part mapping
-	
-	-- Clone all character parts (BaseParts only for cleaner model)
-	for _, part in ipairs(character:GetChildren()) do
-		if part:IsA('BasePart') then
-			local clonedPart = part:Clone()
-			clonedPart.Parent = CharacterModel
-			clonedPart.Anchored = true
-			clonedPart.CanCollide = false
-			
-			-- Remove scripts/welds (keep visuals like Decals, SpecialMesh)
-			for _, child in ipairs(clonedPart:GetChildren()) do
-				if child:IsA('Script') or child:IsA('LocalScript') or child:IsA('Motor6D') or child:IsA('Weld') then
-					child:Destroy()
-				end
-			end
-			
-			PartMap[part] = clonedPart
-		end
-	end
-	
-	-- Set primary part
-	local originalHRP = character:FindFirstChild('HumanoidRootPart')
-	local clonedHRP = PartMap[originalHRP]
-	
-	if clonedHRP then
-		CharacterModel.PrimaryPart = clonedHRP
-		
-		-- Position avatar standing upright at origin (0, 0, 0)
-		-- Calculate proper Y offset so feet are at Y=0
-		local rigType = character:FindFirstChild('Torso') and 'R6' or 'R15'
-		local heightOffset = rigType == 'R6' and 2.5 or 2.8  -- Adjust based on rig type
-		
-		-- Position all parts relative to HRP (standing pose at origin)
-		for originalPart, clonedPart in pairs(PartMap) do
-			if clonedPart and clonedPart.Parent and originalPart and originalPart.Parent then
-				-- Get offset from original character (preserves standing pose)
-				local offset = originalHRP.CFrame:ToObjectSpace(originalPart.CFrame)
-				-- Apply to new position (centered at origin, raised by heightOffset)
-				clonedPart.CFrame = CFrame.new(0, heightOffset, 0) * offset
-			end
-		end
-	end
-	
-	print('[ESP Preview] 3D Character Model Created with', #CharacterModel:GetChildren(), 'parts')
-	
-	-- Apply initial rotation (front-facing)
-	RotateCharacter(CurrentRotation)
-end
+-- Head corner rounding
+Library:Create('UICorner', {
+	CornerRadius = UDim.new(0, 2);
+	Parent = DummyHead;
+})
 
--- Create initial character
-pcall(CreateCharacterModel)
+-- Torso (R6 single piece)
+local DummyTorso = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(163, 162, 165);
+	BorderSizePixel = 0;
+	Size = UDim2.new(0, 32, 0, 42);  -- R6 torso
+	Position = UDim2.new(0.5, -16, 0, 32);
+	ZIndex = 10;
+	Parent = DummyContainer;
+})
 
--- Create Highlight for Chams ESP
-local ChamsHighlight = Instance.new('Highlight')
-ChamsHighlight.Name = 'ChamsESP'
-ChamsHighlight.Adornee = CharacterModel
-ChamsHighlight.FillColor = ESPSettings.ChamsColor
-ChamsHighlight.FillTransparency = ESPSettings.ChamsTransparency
-ChamsHighlight.OutlineColor = Color3.fromRGB(0, 0, 0)
-ChamsHighlight.OutlineTransparency = 0.5
-ChamsHighlight.Enabled = ESPSettings.ChamsESP
-ChamsHighlight.Parent = ViewportFrame
+Library:Create('UICorner', {
+	CornerRadius = UDim.new(0, 2);
+	Parent = DummyTorso;
+})
 
--- Update character when respawning
-game.Players.LocalPlayer.CharacterAdded:Connect(function()
-	task.wait(0.5) -- Wait for character to fully load
-	pcall(CreateCharacterModel)
-	-- Reconnect Chams highlight to new model
-	if ChamsHighlight then
-		ChamsHighlight.Adornee = CharacterModel
-	end
-end)
+-- Left Arm (R6)
+local DummyLeftArm = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(163, 162, 165);
+	BorderSizePixel = 0;
+	Size = UDim2.new(0, 10, 0, 42);  -- Same height as torso
+	Position = UDim2.new(0, 6, 0, 32);
+	ZIndex = 9;
+	Parent = DummyContainer;
+})
 
-print('[ESP Preview] 3D Viewport Avatar Created')
+Library:Create('UICorner', {
+	CornerRadius = UDim.new(0, 2);
+	Parent = DummyLeftArm;
+})
+
+-- Right Arm (R6)
+local DummyRightArm = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(163, 162, 165);
+	BorderSizePixel = 0;
+	Size = UDim2.new(0, 10, 0, 42);
+	Position = UDim2.new(1, -16, 0, 32);
+	ZIndex = 9;
+	Parent = DummyContainer;
+})
+
+Library:Create('UICorner', {
+	CornerRadius = UDim.new(0, 2);
+	Parent = DummyRightArm;
+})
+
+-- Left Leg (R6)
+local DummyLeftLeg = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(163, 162, 165);
+	BorderSizePixel = 0;
+	Size = UDim2.new(0, 14, 0, 48);  -- R6 leg
+	Position = UDim2.new(0, 18, 0, 78);
+	ZIndex = 9;
+	Parent = DummyContainer;
+})
+
+Library:Create('UICorner', {
+	CornerRadius = UDim.new(0, 2);
+	Parent = DummyLeftLeg;
+})
+
+-- Right Leg (R6)
+local DummyRightLeg = Library:Create('Frame', {
+	BackgroundColor3 = Color3.fromRGB(163, 162, 165);
+	BorderSizePixel = 0;
+	Size = UDim2.new(0, 14, 0, 48);
+	Position = UDim2.new(1, -32, 0, 78);
+	ZIndex = 9;
+	Parent = DummyContainer;
+})
+
+Library:Create('UICorner', {
+	CornerRadius = UDim.new(0, 2);
+	Parent = DummyRightLeg;
+})
+
+print('[ESP Preview] R6 Dummy Avatar Created (Clean & Professional)')
 
 -- ESP Overlays Container
 local ESPOverlay = Library:Create('Frame', {
@@ -1694,18 +1531,6 @@ local BoxOutline = Library:Create('Frame', {
 	Position = UDim2.new(0.5, -60, 0.5, -95);  -- Perfect centered
 	ZIndex = 21;
 	Parent = ESPOverlay;
-})
-
--- Filled Box Background (behind borders)
-local BoxFill = Library:Create('Frame', {
-	BackgroundColor3 = ESPSettings.BoxColor;
-	BackgroundTransparency = ESPSettings.FilledBoxTransparency;
-	BorderSizePixel = 0;
-	Size = UDim2.new(1, 0, 1, 0);
-	Position = UDim2.new(0, 0, 0, 0);
-	ZIndex = 21;
-	Visible = ESPSettings.FilledBox;
-	Parent = BoxOutline;
 })
 
 -- Box borders (4 lines, cleaner 1px thickness)
@@ -1802,8 +1627,8 @@ local function getPlayerDisplayName()
 end
 
 local NameLabel = Library:CreateLabel({
-	Position = UDim2.new(0, 0, 0, -18);  -- 18px above box outline (dynamic positioning)
-	Size = UDim2.new(1, 0, 0, 16);
+	Position = UDim2.new(0.5, -60, 0, -22);  -- Above box
+	Size = UDim2.new(0, 120, 0, 16);
 	Text = getPlayerDisplayName();
 	TextSize = 11;
 	TextColor3 = ESPSettings.NameColor;
@@ -1811,7 +1636,7 @@ local NameLabel = Library:CreateLabel({
 	TextStrokeTransparency = 0.5;
 	ZIndex = 25;
 	Visible = ESPSettings.ShowName;  -- Set default visibility
-	Parent = BoxOutline;  -- Parent to BoxOutline for relative positioning
+	Parent = ESPOverlay;
 })
 
 print('[ESP Preview] Name Label Created')
@@ -1832,188 +1657,120 @@ local DistanceLabel = Library:CreateLabel({
 
 print('[ESP Preview] Distance and Labels Created')
 
--- ==================== DYNAMIC ESP PREVIEW SYSTEM ====================
--- Use same skeleton logic as in-game ESP module (from UpdateESP function)
-
--- Initialize SkeletonLines array globally
-SkeletonLines = {}
-
-local function UpdateDynamicESPPreview()
-	if not CharacterModel or not ViewportCamera or not CharacterModel.PrimaryPart then return end
-	
-	local camera = ViewportCamera
-	local char = CharacterModel
-	local hrp = char.PrimaryPart or char:FindFirstChild('HumanoidRootPart')
-	if not hrp then return end
-	
-	-- Calculate 3D to 2D projection (FIXED for ViewportFrame)
-	local function WorldToViewport(position)
-		local vpSize = ViewportFrame.AbsoluteSize
-		
-		-- WorldToViewportPoint returns normalized coordinates (0-1 range)
-		local screenPos, onScreen = camera:WorldToViewportPoint(position)
-		
-		-- Convert normalized coordinates to actual pixel coordinates
-		-- screenPos.X and screenPos.Y are already in 0-1 range for ViewportFrame
-		local x = screenPos.X * vpSize.X
-		local y = screenPos.Y * vpSize.Y
-		
-		return Vector2.new(x, y), onScreen
-	end
-	
-	-- ===== UPDATE BOX ESP (using same logic as CalculateBox) =====
-	local rigType = char:FindFirstChild('Torso') and 'R6' or 'R15'
-	local upVector = hrp.CFrame.UpVector
-	local position = hrp.Position
-	local topY = rigType == 'R6' and 0.5 or 1.8
-	local bottomY = rigType == 'R6' and 4 or 2.5
-	
-	local topPos, topVisible = WorldToViewport(position + (upVector * topY))
-	local bottomPos, bottomVisible = WorldToViewport(position - (upVector * bottomY))
-	
-	if topVisible and bottomVisible then
-		local width = math.max(math.abs(topPos.X - bottomPos.X), 50)
-		local height = math.max(math.abs(bottomPos.Y - topPos.Y), 100)
-		local boxWidth = math.max(height / 1.5, width)
-		local boxHeight = height
-		
-		-- Update BoxOutline position and size
-		BoxOutline.Position = UDim2.fromOffset(
-			math.floor((topPos.X + bottomPos.X) / 2 - boxWidth / 2),
-			math.floor(math.min(topPos.Y, bottomPos.Y))
-		)
-		BoxOutline.Size = UDim2.fromOffset(math.floor(boxWidth), math.floor(boxHeight))
-		
-		-- ===== UPDATE SKELETON ESP (using EXACT same logic as UpdateESP) =====
-		if ESPSettings.SkeletonESP then
-			-- Get body parts (same as in-game ESP)
-			local head = char:FindFirstChild('Head')
-			local torso = char:FindFirstChild('UpperTorso') or char:FindFirstChild('Torso')
-			local leftArm = char:FindFirstChild('LeftUpperArm') or char:FindFirstChild('Left Arm')
-			local rightArm = char:FindFirstChild('RightUpperArm') or char:FindFirstChild('Right Arm')
-			local leftLeg = char:FindFirstChild('LeftUpperLeg') or char:FindFirstChild('Left Leg')
-			local rightLeg = char:FindFirstChild('RightUpperLeg') or char:FindFirstChild('Right Leg')
-			
-			local parts = {head, torso, leftArm, rightArm, leftLeg, rightLeg}
-			local validParts = true
-			
-			for _, part in pairs(parts) do
-				if not part then
-					validParts = false
-					break
-				end
-			end
-			
-			if validParts then
-				-- Use EXACT same connections as in-game ESP (6 lines for simplicity)
-				local connections = {
-					{head, torso}, -- Neck
-					{torso, leftArm}, -- Left shoulder
-					{torso, rightArm}, -- Right shoulder
-					{torso, leftLeg}, -- Left hip
-					{torso, rightLeg}, -- Right hip
-					{leftLeg, rightLeg} -- Pelvis
-				}
-				
-				-- Draw lines (same logic as UpdateESP)
-				for i = 1, 6 do
-					local from, to = connections[i][1], connections[i][2]
-					local fromPos, fromOnScreen = WorldToViewport(from.Position)
-					local toPos, toOnScreen = WorldToViewport(to.Position)
-					
-					if fromOnScreen and toOnScreen then
-						-- Get or create line
-						if not SkeletonLines[i] then
-							SkeletonLines[i] = Library:Create('Frame', {
-								BackgroundColor3 = ESPSettings.SkeletonColor;
-								BorderSizePixel = 0;
-								AnchorPoint = Vector2.new(0, 0.5); -- CRITICAL: Anchor at middle-left for proper rotation
-								ZIndex = 25;
-								Parent = ESPOverlay;
-							})
-						end
-						
-						local line = SkeletonLines[i]
-						local dx = toPos.X - fromPos.X
-						local dy = toPos.Y - fromPos.Y
-						local length = math.sqrt(dx * dx + dy * dy)
-						local angle = math.deg(math.atan2(dy, dx))
-						
-						line.Visible = true
-						line.BackgroundColor3 = ESPSettings.SkeletonColor
-						line.Size = UDim2.fromOffset(math.max(1, math.floor(length)), 2)
-						line.Position = UDim2.fromOffset(math.floor(fromPos.X), math.floor(fromPos.Y))
-						line.Rotation = angle
-					else
-						if SkeletonLines[i] then
-							SkeletonLines[i].Visible = false
-						end
-					end
-				end
-			else
-				-- Hide all lines if parts invalid
-				for i = 1, 6 do
-					if SkeletonLines[i] then
-						SkeletonLines[i].Visible = false
-					end
-				end
-			end
-		else
-			-- Hide skeleton if disabled
-			for i = 1, 6 do
-				if SkeletonLines[i] then
-					SkeletonLines[i].Visible = false
-				end
-			end
-		end
-	end
-end
-
--- Update loop for dynamic ESP preview
-if DynamicESPConnection then
-	DynamicESPConnection:Disconnect()
-end
-
-DynamicESPConnection = game:GetService('RunService').RenderStepped:Connect(function()
-	if CharacterModel and ViewportCamera and ESPPreviewFrame then
-		pcall(UpdateDynamicESPPreview)
-	end
-end)
-
-print('[ESP Preview] Dynamic ESP System Initialized')
-
--- ==================== END DYNAMIC ESP PREVIEW ====================
-
--- Skeleton Lines Container (Universal R6/R15 Support) - LEGACY (kept for compatibility)
+-- Skeleton Lines Container
 local SkeletonContainer = Library:Create('Frame', {
 	BackgroundTransparency = 1;
 	Size = UDim2.new(1, 0, 1, 0);
 	Position = UDim2.new(0, 0, 0, 0);
 	ZIndex = 22;
 	Parent = ESPOverlay;
-	Visible = false; -- Hidden since we use dynamic system now
 })
 
--- Legacy UpdateSkeletonPreview function (now redirects to dynamic system)
-local UpdateSkeletonPreview = function()
-	if UpdateDynamicESPPreview then
-		UpdateDynamicESPPreview()
-	end
-end
+-- R6 Skeleton Lines (simplified & clean)
+-- Head to Torso (neck) - 1px line
+local HeadToTorso = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, 0, 0.5, -66);  -- From head center
+	Size = UDim2.new(0, 1, 0, 6);  -- 1px width, 6px height
+	AnchorPoint = Vector2.new(0.5, 0);
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
 
--- Store references for dynamic updates (backward compatibility)
-local HeadToTorso, TorsoToLeftArm, TorsoToRightArm, LeftArmLine, RightArmLine
-local TorsoToLeftLeg, TorsoToRightLeg, LeftLegLine, RightLegLine
+-- Torso to Left Arm
+local TorsoToLeftArm = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, -16, 0.5, -55);  -- From left shoulder
+	Size = UDim2.new(0, 10, 0, 1);  -- Horizontal line
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
 
-print('[ESP Preview] Legacy skeleton system redirected to dynamic system')
+-- Torso to Right Arm
+local TorsoToRightArm = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, 6, 0.5, -55);  -- From right shoulder
+	Size = UDim2.new(0, 10, 0, 1);
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
+
+-- Left Arm Line
+local LeftArmLine = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, -29, 0.5, -54);
+	Size = UDim2.new(0, 1, 0, 42);  -- Full arm height
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
+
+-- Right Arm Line
+local RightArmLine = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, 28, 0.5, -54);
+	Size = UDim2.new(0, 1, 0, 42);
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
+
+-- Torso to Left Leg
+local TorsoToLeftLeg = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, -7, 0.5, -7);  -- From hip
+	Size = UDim2.new(0, 7, 0, 1);
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
+
+-- Torso to Right Leg
+local TorsoToRightLeg = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, 0, 0.5, -7);  -- From hip
+	Size = UDim2.new(0, 7, 0, 1);
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
+
+-- Left Leg Line
+local LeftLegLine = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, -7, 0.5, -7);
+	Size = UDim2.new(0, 1, 0, 48);  -- Full leg height
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
+
+-- Right Leg Line
+local RightLegLine = Library:Create('Frame', {
+	BackgroundColor3 = ESPSettings.SkeletonColor;
+	BorderSizePixel = 0;
+	Position = UDim2.new(0.5, 6, 0.5, -7);
+	Size = UDim2.new(0, 1, 0, 48);
+	ZIndex = 23;
+	Visible = ESPSettings.SkeletonESP;  -- Set default visibility
+	Parent = SkeletonContainer;
+})
+
+print('[ESP Preview] R6 Skeleton Lines Created (Clean & Professional)')
 
 -- Initial update to show proper state
 task.wait(0.1)
-
--- Force initial skeleton visibility update
-if ESPSettings.SkeletonESP then
-	UpdateSkeletonPreview()
-end
 
 -- Update dynamic labels continuously
 spawn(function()
@@ -2034,16 +1791,13 @@ ESPPreviewFrame = {
 	Window = SecondaryWindow;
 	Main = ESPPreview;
 	PreviewContainer = PreviewContainer;
-	ViewportFrame = ViewportFrame;
-	CharacterModel = CharacterModel;
+	DummyContainer = DummyContainer;
 	BoxTop = BoxTop;
 	BoxBottom = BoxBottom;
 	BoxLeft = BoxLeft;
 	BoxRight = BoxRight;
-	BoxFill = BoxFill;  -- Filled Box reference
 	SkeletonContainer = SkeletonContainer;
-	SkeletonLines = SkeletonLines; -- Store all skeleton lines (will be updated)
-	-- Backward compatibility
+	-- Skeleton lines (R6)
 	HeadToTorso = HeadToTorso;
 	TorsoToLeftArm = TorsoToLeftArm;
 	TorsoToRightArm = TorsoToRightArm;
@@ -2061,17 +1815,11 @@ ESPPreviewFrame = {
 	HealthText = HealthText;
 	ContentFrame = ContentFrame;
 	ESPOverlay = ESPOverlay;
-	-- Update functions
+	-- Update function
 	Update = UpdateESPPreview;
-	UpdateAvatar = CreateCharacterModel;
-	RotateAvatar = RotateCharacter;
-	UpdateSkeleton = function()
-		UpdateSkeletonPreview()
-		-- Update reference after skeleton rebuild
-		ESPPreviewFrame.SkeletonLines = SkeletonLines
-	end;
 }
 
-print('[ESP Preview] Initialized with 3D avatar and universal skeleton system')
+print('[ESP Preview] Initialized with dynamic data')
 
 -- ===== END OF ESP PREVIEW INITIALIZATION =====
+

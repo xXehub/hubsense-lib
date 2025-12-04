@@ -25,7 +25,6 @@ local ESPEnabled = false
 local ESPConnections = {}
 local ESPObjects = {}
 local ESPPreviewFrame = nil
-local DynamicESPConnection = nil -- Connection for ESP preview update loop
 local SimulatedDistance = 150 -- Simulated distance in studs for ESP preview scaling
 local ESPSettings = {
 	ShowName = true,
@@ -34,8 +33,6 @@ local ESPSettings = {
 	ShowBox = true,
 	BoxESP = false,
 	SkeletonESP = false,
-	ChamsESP = false,
-	FilledBox = false,
 	MaxDistance = 1000,
 	TeamCheck = false,
 	NameColor = Color3.fromRGB(255, 255, 255),
@@ -43,10 +40,7 @@ local ESPSettings = {
 	HealthBarColor = Color3.fromRGB(0, 255, 0),
 	SkeletonColor = Color3.fromRGB(255, 255, 255),
 	DistanceColor = Color3.fromRGB(180, 180, 180),
-	TracerColor = Color3.fromRGB(255, 255, 255),
-	ChamsColor = Color3.fromRGB(255, 120, 0),
-	ChamsTransparency = 0.3,
-	FilledBoxTransparency = 0.2
+	TracerColor = Color3.fromRGB(255, 255, 255)
 }
 
 -- Load Words Function
@@ -261,20 +255,6 @@ local function UpdateESPPreview()
 		end
 	end
 	
-	-- Update Filled Box
-	if ESPPreviewFrame.BoxFill then
-		ESPPreviewFrame.BoxFill.Visible = ESPSettings.FilledBox == true
-		ESPPreviewFrame.BoxFill.BackgroundColor3 = ESPSettings.BoxColor or Color3.fromRGB(255, 0, 0)
-		ESPPreviewFrame.BoxFill.BackgroundTransparency = ESPSettings.FilledBoxTransparency or 0.2
-	end
-	
-	-- Update Chams Highlight
-	if ChamsHighlight then
-		ChamsHighlight.Enabled = ESPSettings.ChamsESP == true
-		ChamsHighlight.FillColor = ESPSettings.ChamsColor or Color3.fromRGB(255, 120, 0)
-		ChamsHighlight.FillTransparency = ESPSettings.ChamsTransparency or 0.3
-	end
-	
 	-- Update Skeleton ESP visibility and colors (Universal R6/R15)
 	local skeletonVisible = ESPSettings.SkeletonESP == true
 	local skeletonColor = ESPSettings.SkeletonColor or Color3.fromRGB(255, 255, 255)
@@ -364,7 +344,6 @@ local function CreateESP(player)
 		-- 2D Box
 		BoxOutline = Drawing.new('Square'),
 		Box = Drawing.new('Square'),
-		BoxFilled = Drawing.new('Square'),  -- Filled box
 		
 		-- Tracer
 		Tracer = Drawing.new('Line'),
@@ -383,10 +362,7 @@ local function CreateESP(player)
 		HeadDot = Drawing.new('Circle'),
 		
 		-- Skeleton lines
-		Skeleton = {},
-		
-		-- Chams (3D Highlight)
-		Chams = nil  -- Will be created if character exists
+		Skeleton = {}
 	}
 	
 	-- Initialize skeleton lines
@@ -454,25 +430,6 @@ local function CreateESP(player)
 		espObj.Skeleton[i].Color = ESPSettings.SkeletonColor
 		espObj.Skeleton[i].Transparency = 1
 	end
-	
-	-- Set default properties for filled box
-	espObj.BoxFilled.Filled = true
-	espObj.BoxFilled.Color = ESPSettings.BoxColor
-	espObj.BoxFilled.Transparency = 1 - ESPSettings.FilledBoxTransparency
-	
-	-- Create Chams (Highlight) for 3D character
-	if char then
-		local highlight = Instance.new('Highlight')
-		highlight.Name = 'ESPChams'
-		highlight.Adornee = char
-		highlight.FillColor = ESPSettings.ChamsColor
-		highlight.FillTransparency = ESPSettings.ChamsTransparency
-		highlight.OutlineColor = Color3.fromRGB(0, 0, 0)
-		highlight.OutlineTransparency = 0.5
-		highlight.Enabled = ESPSettings.ChamsESP
-		highlight.Parent = char
-		espObj.Chams = highlight
-	end
 end
 
 local function RemoveESP(player)
@@ -482,7 +439,6 @@ local function RemoveESP(player)
 		
 		if espObj.Box then espObj.Box:Remove() end
 		if espObj.BoxOutline then espObj.BoxOutline:Remove() end
-		if espObj.BoxFilled then espObj.BoxFilled:Remove() end
 		if espObj.Tracer then espObj.Tracer:Remove() end
 		if espObj.NameText then espObj.NameText:Remove() end
 		if espObj.DistanceText then espObj.DistanceText:Remove() end
@@ -491,12 +447,6 @@ local function RemoveESP(player)
 		if espObj.HealthBarOutline then espObj.HealthBarOutline:Remove() end
 		if espObj.HeadDot then espObj.HeadDot:Remove() end
 		if espObj.HeadDotOutline then espObj.HeadDotOutline:Remove() end
-		
-		-- Remove Chams (Highlight)
-		if espObj.Chams then
-			espObj.Chams:Destroy()
-			espObj.Chams = nil
-		end
 		
 		if espObj.Skeleton then
 			for i = 1, 6 do
@@ -553,26 +503,6 @@ local function UpdateESP()
 				else
 					espObj.BoxOutline.Visible = false
 					espObj.Box.Visible = false
-				end
-				
-				-- Update Filled Box
-				if ESPSettings.FilledBox then
-					espObj.BoxFilled.Visible = true
-					espObj.BoxFilled.Position = boxPosition
-					espObj.BoxFilled.Size = boxSize
-					espObj.BoxFilled.Color = ESPSettings.BoxColor
-					espObj.BoxFilled.Transparency = 1 - ESPSettings.FilledBoxTransparency
-				else
-					espObj.BoxFilled.Visible = false
-				end
-				
-				-- Update Chams (Highlight)
-				if ESPSettings.ChamsESP and espObj.Chams then
-					espObj.Chams.Enabled = true
-					espObj.Chams.FillColor = ESPSettings.ChamsColor
-					espObj.Chams.FillTransparency = ESPSettings.ChamsTransparency
-				elseif espObj.Chams then
-					espObj.Chams.Enabled = false
 				end
 				
 				-- Update Tracer
@@ -710,8 +640,6 @@ local function UpdateESP()
 				-- Hide all ESP elements
 				if espObj.Box then espObj.Box.Visible = false end
 				if espObj.BoxOutline then espObj.BoxOutline.Visible = false end
-				if espObj.BoxFilled then espObj.BoxFilled.Visible = false end
-				if espObj.Chams then espObj.Chams.Enabled = false end
 				if espObj.Tracer then espObj.Tracer.Visible = false end
 				if espObj.NameText then espObj.NameText.Visible = false end
 				if espObj.DistanceText then espObj.DistanceText.Visible = false end
@@ -1152,26 +1080,6 @@ ESPBox:AddToggle('SkeletonESP', {
 	end
 })
 
-ESPBox:AddToggle('ChamsESP', {
-	Text = 'Chams (3D Highlight)',
-	Default = false,
-	Tooltip = 'Highlight player body parts in 3D',
-	Callback = function(Value)
-		ESPSettings.ChamsESP = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPBox:AddToggle('FilledBox', {
-	Text = 'Filled Box',
-	Default = false,
-	Tooltip = 'Fill box background with transparent color',
-	Callback = function(Value)
-		ESPSettings.FilledBox = Value
-		UpdateESPPreview()
-	end
-})
-
 ESPBox:AddToggle('TeamCheck', {
 	Text = 'Team Check',
 	Default = false,
@@ -1347,16 +1255,6 @@ ESPColorsBox:AddLabel('Skeleton Color:'):AddColorPicker('SkeletonColor', {
 	end
 })
 
-ESPColorsBox:AddLabel('Chams Color:'):AddColorPicker('ChamsColor', {
-	Default = Color3.fromRGB(255, 120, 0),
-	Title = 'Chams Highlight Color',
-	Transparency = 0.3,
-	Callback = function(Value)
-		ESPSettings.ChamsColor = Value
-		UpdateESPPreview()
-	end
-})
-
 -- ==================== UI CONFIG TAB ====================
 local MenuGroup = Tabs['Configuration']:AddLeftGroupbox('Menu')
 
@@ -1366,34 +1264,6 @@ MenuGroup:AddButton({
 	Tooltip = 'Unload the entire UI (double click)',
 	Func = function()
 		Library:Unload()
-	end
-})
-
-MenuGroup:AddButton({
-	Text = '🗑️ Unload Script',
-	DoubleClick = true,
-	Tooltip = 'Disconnect all ESP connections and cleanup (double click)',
-	Func = function()
-		-- Disconnect ESP connections
-		for _, connection in pairs(ESPConnections) do
-			if connection then
-				connection:Disconnect()
-			end
-		end
-		ESPConnections = {}
-		
-		-- Remove all ESP objects
-		for player, _ in pairs(ESPObjects) do
-			RemoveESP(player)
-		end
-		
-		-- Disconnect dynamic ESP connection
-		if DynamicESPConnection then
-			DynamicESPConnection:Disconnect()
-			DynamicESPConnection = nil
-		end
-		
-		print('Script unloaded - all connections disconnected')
 	end
 })
 
@@ -1440,7 +1310,7 @@ end)
 
 Library.KeybindFrame.Visible = true
 
--- Connect ESP preview visibility to main window (handles both manual visibility changes AND Library:Toggle())
+-- Connect ESP preview visibility to main window
 if SecondaryWindow then
 	Window.Holder:GetPropertyChangedSignal('Visible'):Connect(function()
 		if SecondaryWindow.Holder then
@@ -1654,25 +1524,10 @@ end
 -- Create initial character
 pcall(CreateCharacterModel)
 
--- Create Highlight for Chams ESP
-local ChamsHighlight = Instance.new('Highlight')
-ChamsHighlight.Name = 'ChamsESP'
-ChamsHighlight.Adornee = CharacterModel
-ChamsHighlight.FillColor = ESPSettings.ChamsColor
-ChamsHighlight.FillTransparency = ESPSettings.ChamsTransparency
-ChamsHighlight.OutlineColor = Color3.fromRGB(0, 0, 0)
-ChamsHighlight.OutlineTransparency = 0.5
-ChamsHighlight.Enabled = ESPSettings.ChamsESP
-ChamsHighlight.Parent = ViewportFrame
-
 -- Update character when respawning
 game.Players.LocalPlayer.CharacterAdded:Connect(function()
 	task.wait(0.5) -- Wait for character to fully load
 	pcall(CreateCharacterModel)
-	-- Reconnect Chams highlight to new model
-	if ChamsHighlight then
-		ChamsHighlight.Adornee = CharacterModel
-	end
 end)
 
 print('[ESP Preview] 3D Viewport Avatar Created')
@@ -1694,18 +1549,6 @@ local BoxOutline = Library:Create('Frame', {
 	Position = UDim2.new(0.5, -60, 0.5, -95);  -- Perfect centered
 	ZIndex = 21;
 	Parent = ESPOverlay;
-})
-
--- Filled Box Background (behind borders)
-local BoxFill = Library:Create('Frame', {
-	BackgroundColor3 = ESPSettings.BoxColor;
-	BackgroundTransparency = ESPSettings.FilledBoxTransparency;
-	BorderSizePixel = 0;
-	Size = UDim2.new(1, 0, 1, 0);
-	Position = UDim2.new(0, 0, 0, 0);
-	ZIndex = 21;
-	Visible = ESPSettings.FilledBox;
-	Parent = BoxOutline;
 })
 
 -- Box borders (4 lines, cleaner 1px thickness)
@@ -1970,6 +1813,7 @@ local function UpdateDynamicESPPreview()
 end
 
 -- Update loop for dynamic ESP preview
+local DynamicESPConnection
 if DynamicESPConnection then
 	DynamicESPConnection:Disconnect()
 end
@@ -2040,7 +1884,6 @@ ESPPreviewFrame = {
 	BoxBottom = BoxBottom;
 	BoxLeft = BoxLeft;
 	BoxRight = BoxRight;
-	BoxFill = BoxFill;  -- Filled Box reference
 	SkeletonContainer = SkeletonContainer;
 	SkeletonLines = SkeletonLines; -- Store all skeleton lines (will be updated)
 	-- Backward compatibility
@@ -2075,3 +1918,4 @@ ESPPreviewFrame = {
 print('[ESP Preview] Initialized with 3D avatar and universal skeleton system')
 
 -- ===== END OF ESP PREVIEW INITIALIZATION =====
+

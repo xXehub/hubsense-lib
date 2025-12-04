@@ -710,8 +710,6 @@ local function UpdateESP()
 				-- Hide all ESP elements
 				if espObj.Box then espObj.Box.Visible = false end
 				if espObj.BoxOutline then espObj.BoxOutline.Visible = false end
-				if espObj.BoxFilled then espObj.BoxFilled.Visible = false end
-				if espObj.Chams then espObj.Chams.Enabled = false end
 				if espObj.Tracer then espObj.Tracer.Visible = false end
 				if espObj.NameText then espObj.NameText.Visible = false end
 				if espObj.DistanceText then espObj.DistanceText.Visible = false end
