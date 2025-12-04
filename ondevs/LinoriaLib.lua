@@ -479,6 +479,12 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
+        local IsToggle = ToggleLabel.Parent ~= Container
+        local DisplayParent = ToggleLabel
+        if IsToggle then
+            DisplayParent = ToggleLabel.Parent -- ToggleInner
+        end
+
         local DisplayFrame = Library:Create('Frame', {
             BackgroundColor3 = ColorPicker.Value;
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
@@ -486,8 +492,13 @@ do
             Size = UDim2.new(0, 28, 0, 14);
             LayoutOrder = 999; -- keep order for label-only cases
             ZIndex = 6;
-            Parent = ToggleLabel;
+            Parent = DisplayParent;
         });
+
+        if IsToggle then
+            DisplayFrame.AnchorPoint = Vector2.new(1, 0.5)
+            DisplayFrame.Position = UDim2.new(1, -4, 0.5, 0)
+        end
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
         local CheckerFrame = Library:Create('ImageLabel', {
