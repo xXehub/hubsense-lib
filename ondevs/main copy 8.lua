@@ -177,22 +177,6 @@ end
 -- Start loading words in background
 spawn(LoadWords)
 
--- ==================== ESP PREVIEW UPDATE FUNCTION ====================
-local function UpdateESPPreview()
-	if not ESPPreviewFrame then return end
-	
-	-- Update using LinoriaLib's native Update method
-	ESPPreviewFrame:Update({
-		ShowBox = ESPSettings.ShowBox;
-		ShowName = ESPSettings.ShowName;
-		ShowDistance = ESPSettings.ShowDistance;
-		ShowHealth = ESPSettings.ShowHealth;
-		BoxColor = ESPSettings.BoxColor;
-		NameColor = ESPSettings.NameColor;
-		HealthBarColor = ESPSettings.HealthBarColor;
-	})
-end
-
 -- ==================== ESP FUNCTIONS ====================
 local function CreateESP(player)
 	if not player.Character or ESPObjects[player] then return end
@@ -679,7 +663,9 @@ ESPBox:AddToggle('ShowName', {
 	Tooltip = 'Display player names',
 	Callback = function(Value)
 		ESPSettings.ShowName = Value
-		UpdateESPPreview()
+		if ESPPreviewFrame then
+			ESPPreviewFrame.NameLabel.Visible = Value
+		end
 	end
 })
 
@@ -689,7 +675,9 @@ ESPBox:AddToggle('ShowDistance', {
 	Tooltip = 'Display distance to players',
 	Callback = function(Value)
 		ESPSettings.ShowDistance = Value
-		UpdateESPPreview()
+		if ESPPreviewFrame then
+			ESPPreviewFrame.DistanceLabel.Visible = Value
+		end
 	end
 })
 
@@ -699,17 +687,9 @@ ESPBox:AddToggle('ShowBox', {
 	Tooltip = 'Display box around players',
 	Callback = function(Value)
 		ESPSettings.ShowBox = Value
-		UpdateESPPreview()
-	end
-})
-
-ESPBox:AddToggle('ShowHealth', {
-	Text = 'Show Health',
-	Default = true,
-	Tooltip = 'Display health bar',
-	Callback = function(Value)
-		ESPSettings.ShowHealth = Value
-		UpdateESPPreview()
+		if ESPPreviewFrame then
+			ESPPreviewFrame.PlayerBox.Visible = Value
+		end
 	end
 })
 
@@ -743,7 +723,9 @@ ESPColorsBox:AddLabel('Name Color:'):AddColorPicker('NameColor', {
 	Title = 'Name Color',
 	Callback = function(Value)
 		ESPSettings.NameColor = Value
-		UpdateESPPreview()
+		if ESPPreviewFrame then
+			ESPPreviewFrame.NameLabel.TextColor3 = Value
+		end
 	end
 })
 
@@ -752,18 +734,125 @@ ESPColorsBox:AddLabel('Box Color:'):AddColorPicker('BoxColor', {
 	Title = 'Box Color',
 	Callback = function(Value)
 		ESPSettings.BoxColor = Value
-		UpdateESPPreview()
+		if ESPPreviewFrame then
+			ESPPreviewFrame.PlayerBox.BorderColor3 = Value
+		end
 	end
 })
 
-ESPColorsBox:AddLabel('Health Bar Color:'):AddColorPicker('HealthBarColor', {
-	Default = Color3.fromRGB(0, 255, 0),
-	Title = 'Health Bar Color',
-	Callback = function(Value)
-		ESPSettings.HealthBarColor = Value
-		UpdateESPPreview()
-	end
-})
+-- Create ESP Preview Box
+local ESPPreviewBox = Tabs.Visual:AddRightGroupbox('ESP Preview')
+
+-- Store the groupbox reference and inject preview after render
+task.spawn(function()
+	wait(0.5)
+	
+	pcall(function()
+		-- ESPPreviewBox contains .Container property (internal LinoriaLib structure)
+		local Container = ESPPreviewBox.Container
+		
+		if not Container then
+			warn('[ESP Preview] Groupbox Container not found')
+			return
+		end
+		
+		print('[ESP Preview] Found container, creating preview...')
+		print('[ESP Preview] Container size:', Container.AbsoluteSize)
+		
+		-- Create preview frame inside the groupbox container
+		local PreviewFrame = Instance.new('Frame')
+		PreviewFrame.Name = 'ESPPreviewContent'
+		PreviewFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+		PreviewFrame.BorderColor3 = Color3.fromRGB(40, 40, 40)
+		PreviewFrame.BorderSizePixel = 1
+		PreviewFrame.Size = UDim2.new(1, -8, 0, 180)
+		PreviewFrame.Position = UDim2.new(0, 4, 0, 4)
+		PreviewFrame.ZIndex = 100
+		PreviewFrame.Visible = true
+		PreviewFrame.Parent = Container
+		
+		print('[ESP Preview] PreviewFrame created at position:', PreviewFrame.AbsolutePosition)
+		
+		-- Player Box (ESP box)
+		local PlayerBox = Instance.new('Frame')
+		PlayerBox.Name = 'PlayerBox'
+		PlayerBox.BackgroundTransparency = 1
+		PlayerBox.BorderColor3 = ESPSettings.BoxColor
+		PlayerBox.BorderSizePixel = 2
+		PlayerBox.Position = UDim2.new(0.5, -30, 0.5, -50)
+		PlayerBox.Size = UDim2.new(0, 60, 0, 100)
+		PlayerBox.ZIndex = 101
+		PlayerBox.Visible = true
+		PlayerBox.Parent = PreviewFrame
+		
+		-- Character box
+		local CharBox = Instance.new('Frame')
+		CharBox.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+		CharBox.BorderSizePixel = 0
+		CharBox.Position = UDim2.new(0.5, -12, 0.5, -25)
+		CharBox.Size = UDim2.new(0, 24, 0, 50)
+		CharBox.ZIndex = 102
+		CharBox.Visible = true
+		CharBox.Parent = PreviewFrame
+		
+		-- Name Label
+		local NameLabel = Instance.new('TextLabel')
+		NameLabel.Name = 'NameLabel'
+		NameLabel.BackgroundTransparency = 1
+		NameLabel.Position = UDim2.new(0.5, -60, 0, 15)
+		NameLabel.Size = UDim2.new(0, 120, 0, 18)
+		NameLabel.Font = Enum.Font.Code
+		NameLabel.Text = game.Players.LocalPlayer.Name
+		NameLabel.TextColor3 = ESPSettings.NameColor
+		NameLabel.TextSize = 12
+		NameLabel.TextStrokeTransparency = 0.5
+		NameLabel.ZIndex = 103
+		NameLabel.Visible = true
+		NameLabel.Parent = PreviewFrame
+		
+		-- Distance Label
+		local DistanceLabel = Instance.new('TextLabel')
+		DistanceLabel.Name = 'DistanceLabel'
+		DistanceLabel.BackgroundTransparency = 1
+		DistanceLabel.Position = UDim2.new(0.5, -20, 1, -30)
+		DistanceLabel.Size = UDim2.new(0, 40, 0, 16)
+		DistanceLabel.Font = Enum.Font.Code
+		DistanceLabel.Text = '25m'
+		DistanceLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+		DistanceLabel.TextSize = 11
+		DistanceLabel.TextStrokeTransparency = 0.5
+		DistanceLabel.ZIndex = 103
+		DistanceLabel.Visible = true
+		DistanceLabel.Parent = PreviewFrame
+		
+		-- Weapon Label
+		local WeaponLabel = Instance.new('TextLabel')
+		WeaponLabel.BackgroundTransparency = 1
+		WeaponLabel.Position = UDim2.new(0, 0, 1, -18)
+		WeaponLabel.Size = UDim2.new(1, 0, 0, 16)
+		WeaponLabel.Font = Enum.Font.Code
+		WeaponLabel.Text = 'Weapon'
+		WeaponLabel.TextColor3 = Color3.fromRGB(140, 140, 140)
+		WeaponLabel.TextSize = 10
+		WeaponLabel.TextXAlignment = Enum.TextXAlignment.Center
+		WeaponLabel.ZIndex = 103
+		WeaponLabel.Visible = true
+		WeaponLabel.Parent = PreviewFrame
+		
+		-- Store references
+		ESPPreviewFrame = {
+			Container = PreviewFrame,
+			PlayerBox = PlayerBox,
+			NameLabel = NameLabel,
+			DistanceLabel = DistanceLabel,
+			WeaponLabel = WeaponLabel
+		}
+		
+		print('[ESP Preview] ✅ Preview created successfully!')
+		print('[ESP Preview] Preview visible:', PreviewFrame.Visible)
+		print('[ESP Preview] Preview parent:', PreviewFrame.Parent.Name)
+	end)
+end)
 
 -- ==================== UI CONFIG TAB ====================
 local MenuGroup = Tabs['Configuration']:AddLeftGroupbox('Menu')
@@ -843,42 +932,3 @@ ThemeManager:ApplyToTab(Tabs['Configuration'])
 ThemeManager:ApplyTheme('Default')
 
 SaveManager:LoadAutoloadConfig()
-
--- Create ESP Preview Box using native LinoriaLib widget
-local ESPPreviewBox = Tabs.Visual:AddRightGroupbox('ESP Preview')
-
--- Create ESP Preview using LinoriaLib's AddESPPreview method
-ESPPreviewFrame = ESPPreviewBox:AddESPPreview({
-	Height = 200;
-	PlayerName = game.Players.LocalPlayer.DisplayName or game.Players.LocalPlayer.Name;
-	DistanceText = '< Weapon >';
-	HealthText = '75';
-	Settings = {
-		ShowBox = ESPSettings.ShowBox;
-		ShowName = ESPSettings.ShowName;
-		ShowDistance = ESPSettings.ShowDistance;
-		ShowHealth = ESPSettings.ShowHealth;
-		BoxColor = ESPSettings.BoxColor;
-		NameColor = ESPSettings.NameColor;
-		HealthBarColor = ESPSettings.HealthBarColor;
-	};
-	OnUpdate = function(Settings)
-		-- Sync with global ESPSettings when preview updates
-		for k, v in pairs(Settings) do
-			ESPSettings[k] = v;
-		end;
-	end;
-})
-
-ESPPreviewBox:AddDivider()
-
-ESPPreviewBox:AddToggle('ShowESPPreview', {
-	Text = 'Show Preview',
-	Default = true,
-	Tooltip = 'Toggle ESP preview visibility',
-	Callback = function(Value)
-		if ESPPreviewFrame then
-			ESPPreviewFrame:SetVisible(Value)
-		end
-	end
-})

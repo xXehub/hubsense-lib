@@ -2824,6 +2824,277 @@ do
         return Table;
     end;
 
+    function Funcs:AddESPPreview(Info)
+        local Preview = {
+            Type = 'ESPPreview';
+            Settings = Info.Settings or {};
+            OnUpdate = Info.OnUpdate;
+        };
+        
+        local Groupbox = self;
+        local Container = Groupbox.Container;
+        
+        -- Calculate preview height (fixed size for consistent appearance)
+        local PreviewHeight = Info.Height or 200;
+        
+        -- Outer frame (black border)
+        local PreviewOuter = Library:Create('Frame', {
+            BackgroundColor3 = Color3.new(0, 0, 0);
+            BorderSizePixel = 0;
+            Size = UDim2.new(1, -4, 0, PreviewHeight);
+            ZIndex = 5;
+            Parent = Container;
+        });
+        
+        -- Inner frame (background)
+        local PreviewInner = Library:Create('Frame', {
+            BackgroundColor3 = Library.BackgroundColor;
+            BorderColor3 = Library.OutlineColor;
+            BorderMode = Enum.BorderMode.Inset;
+            Size = UDim2.new(1, 0, 1, 0);
+            ZIndex = 6;
+            Parent = PreviewOuter;
+        });
+        
+        Library:AddToRegistry(PreviewInner, {
+            BackgroundColor3 = 'BackgroundColor';
+            BorderColor3 = 'OutlineColor';
+        });
+        
+        -- Content container
+        local ContentFrame = Library:Create('Frame', {
+            BackgroundColor3 = Library.MainColor;
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 4, 0, 4);
+            Size = UDim2.new(1, -8, 1, -8);
+            ZIndex = 7;
+            Parent = PreviewInner;
+        });
+        
+        Library:AddToRegistry(ContentFrame, {
+            BackgroundColor3 = 'MainColor';
+        });
+        
+        -- Player Box Preview (Outline style) - Center positioned
+        local BoxTop = Library:Create('Frame', {
+            BackgroundTransparency = 1;
+            BorderColor3 = Preview.Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            BorderSizePixel = 2;
+            Position = UDim2.new(0.5, -32, 0.5, -50);
+            Size = UDim2.new(0, 64, 0, 100);
+            ZIndex = 8;
+            Parent = ContentFrame;
+        });
+        
+        -- Player Head Circle
+        local HeadCircle = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(180, 180, 180);
+            BorderColor3 = Preview.Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            BorderSizePixel = 1;
+            Position = UDim2.new(0.5, -8, 0, 6);
+            Size = UDim2.new(0, 16, 0, 16);
+            ZIndex = 9;
+            Parent = BoxTop;
+        });
+        
+        Library:Create('UICorner', {
+            CornerRadius = UDim.new(1, 0);
+            Parent = HeadCircle;
+        });
+        
+        -- Player Body Rectangle
+        local BodyRect = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(150, 150, 150);
+            BorderColor3 = Preview.Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            BorderSizePixel = 1;
+            Position = UDim2.new(0.5, -10, 0, 26);
+            Size = UDim2.new(0, 20, 0, 36);
+            ZIndex = 9;
+            Parent = BoxTop;
+        });
+        
+        -- Player Legs
+        local LeftLeg = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(120, 120, 120);
+            BorderColor3 = Preview.Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            BorderSizePixel = 1;
+            Position = UDim2.new(0.5, -10, 0, 64);
+            Size = UDim2.new(0, 8, 0, 32);
+            ZIndex = 9;
+            Parent = BoxTop;
+        });
+        
+        local RightLeg = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(120, 120, 120);
+            BorderColor3 = Preview.Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            BorderSizePixel = 1;
+            Position = UDim2.new(0.5, 2, 0, 64);
+            Size = UDim2.new(0, 8, 0, 32);
+            ZIndex = 9;
+            Parent = BoxTop;
+        });
+        
+        -- Player Name Label (above box)
+        local playerName = (Info.PlayerName) or (Players.LocalPlayer and (Players.LocalPlayer.DisplayName or Players.LocalPlayer.Name)) or 'Player';
+        local NameLabel = Library:CreateLabel({
+            Position = UDim2.new(0.5, -60, 0, 12);
+            Size = UDim2.new(0, 120, 0, 16);
+            Text = playerName;
+            TextSize = 12;
+            TextColor3 = Preview.Settings.NameColor or Color3.fromRGB(255, 255, 255);
+            ZIndex = 10;
+            Parent = ContentFrame;
+        });
+        
+        -- Distance Label (below box)
+        local DistanceLabel = Library:CreateLabel({
+            Position = UDim2.new(0.5, -50, 1, -23);
+            Size = UDim2.new(0, 100, 0, 15);
+            Text = Info.DistanceText or '< Weapon >';
+            TextSize = 10;
+            TextColor3 = Color3.fromRGB(180, 180, 180);
+            ZIndex = 10;
+            Parent = ContentFrame;
+        });
+        
+        -- Health Bar Background (Left side of box)
+        local HealthBarBG = Library:Create('Frame', {
+            BackgroundColor3 = Color3.fromRGB(30, 30, 30);
+            BorderColor3 = Color3.fromRGB(0, 0, 0);
+            BorderSizePixel = 1;
+            Position = UDim2.new(0.5, -40, 0.5, -50);
+            Size = UDim2.new(0, 4, 0, 100);
+            ZIndex = 8;
+            Parent = ContentFrame;
+        });
+        
+        -- Health Bar Fill
+        local HealthBar = Library:Create('Frame', {
+            BackgroundColor3 = Preview.Settings.HealthBarColor or Color3.fromRGB(0, 255, 0);
+            BorderSizePixel = 0;
+            Position = UDim2.new(0, 0, 0.25, 0);
+            Size = UDim2.new(1, 0, 0.75, 0);
+            ZIndex = 9;
+            Parent = HealthBarBG;
+        });
+        
+        -- Health Text
+        local HealthText = Library:CreateLabel({
+            Position = UDim2.new(0, -22, 0.25, -2);
+            Size = UDim2.new(0, 18, 0, 12);
+            Text = Info.HealthText or '75';
+            TextSize = 9;
+            TextXAlignment = Enum.TextXAlignment.Right;
+            ZIndex = 10;
+            Parent = HealthBarBG;
+        });
+        
+        -- Store references for updates
+        Preview.Elements = {
+            Outer = PreviewOuter;
+            Inner = PreviewInner;
+            Content = ContentFrame;
+            BoxTop = BoxTop;
+            HeadCircle = HeadCircle;
+            BodyRect = BodyRect;
+            LeftLeg = LeftLeg;
+            RightLeg = RightLeg;
+            NameLabel = NameLabel;
+            DistanceLabel = DistanceLabel;
+            HealthBar = HealthBar;
+            HealthBarBG = HealthBarBG;
+            HealthText = HealthText;
+        };
+        
+        -- Update method for changing colors/visibility
+        function Preview:Update(NewSettings)
+            if NewSettings then
+                for k, v in pairs(NewSettings) do
+                    Preview.Settings[k] = v;
+                end;
+            end;
+            
+            local Elems = Preview.Elements;
+            local Settings = Preview.Settings;
+            
+            -- Update box colors and visibility
+            if Elems.BoxTop then
+                Elems.BoxTop.Visible = (Settings.ShowBox ~= false);
+                Elems.BoxTop.BorderColor3 = Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            end;
+            
+            if Elems.HeadCircle then
+                Elems.HeadCircle.Visible = (Settings.ShowBox ~= false);
+                Elems.HeadCircle.BorderColor3 = Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            end;
+            
+            if Elems.BodyRect then
+                Elems.BodyRect.Visible = (Settings.ShowBox ~= false);
+                Elems.BodyRect.BorderColor3 = Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            end;
+            
+            if Elems.LeftLeg then
+                Elems.LeftLeg.Visible = (Settings.ShowBox ~= false);
+                Elems.LeftLeg.BorderColor3 = Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            end;
+            
+            if Elems.RightLeg then
+                Elems.RightLeg.Visible = (Settings.ShowBox ~= false);
+                Elems.RightLeg.BorderColor3 = Settings.BoxColor or Color3.fromRGB(255, 0, 0);
+            end;
+            
+            -- Update name
+            if Elems.NameLabel then
+                Elems.NameLabel.Visible = (Settings.ShowName ~= false);
+                Elems.NameLabel.TextColor3 = Settings.NameColor or Color3.fromRGB(255, 255, 255);
+            end;
+            
+            -- Update distance
+            if Elems.DistanceLabel then
+                Elems.DistanceLabel.Visible = (Settings.ShowDistance ~= false);
+            end;
+            
+            -- Update health bar
+            if Elems.HealthBar then
+                Elems.HealthBar.Visible = (Settings.ShowHealth ~= false);
+                Elems.HealthBar.BackgroundColor3 = Settings.HealthBarColor or Color3.fromRGB(0, 255, 0);
+            end;
+            
+            if Elems.HealthBarBG then
+                Elems.HealthBarBG.Visible = (Settings.ShowHealth ~= false);
+            end;
+            
+            if Elems.HealthText then
+                Elems.HealthText.Visible = (Settings.ShowHealth ~= false);
+            end;
+            
+            -- Callback for external updates
+            if Preview.OnUpdate then
+                Library:SafeCallback(Preview.OnUpdate, Settings);
+            end;
+        end;
+        
+        function Preview:SetVisible(Visible)
+            Preview.Elements.Outer.Visible = Visible;
+        end;
+        
+        function Preview:SetPlayerName(Name)
+            Preview.Elements.NameLabel.Text = Name;
+        end;
+        
+        function Preview:SetHealth(Health)
+            Preview.Elements.HealthText.Text = tostring(Health);
+            local HealthPercent = math.clamp(Health / 100, 0, 1);
+            Preview.Elements.HealthBar.Size = UDim2.new(1, 0, HealthPercent, 0);
+            Preview.Elements.HealthBar.Position = UDim2.new(0, 0, 1 - HealthPercent, 0);
+        end;
+        
+        Groupbox:AddBlank(5);
+        Groupbox:Resize();
+        
+        return Preview;
+    end;
+
     function Funcs:AddDependencyBox()
         local Depbox = {
             Dependencies = {};
