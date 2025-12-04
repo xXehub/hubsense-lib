@@ -479,12 +479,6 @@ do
 
         ColorPicker:SetHSVFromRGB(ColorPicker.Value);
 
-        local IsToggle = ToggleLabel.Parent ~= Container
-        local DisplayParent = ToggleLabel
-        if IsToggle then
-            DisplayParent = ToggleLabel.Parent -- ToggleInner
-        end
-
         local DisplayFrame = Library:Create('Frame', {
             BackgroundColor3 = ColorPicker.Value;
             BorderColor3 = Library:GetDarkerColor(ColorPicker.Value);
@@ -492,13 +486,8 @@ do
             Size = UDim2.new(0, 28, 0, 14);
             LayoutOrder = 999; -- keep order for label-only cases
             ZIndex = 6;
-            Parent = DisplayParent;
+            Parent = ToggleLabel;
         });
-
-        if IsToggle then
-            DisplayFrame.AnchorPoint = Vector2.new(1, 0.5)
-            DisplayFrame.Position = UDim2.new(1, -4, 0.5, 0)
-        end
 
         -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
         local CheckerFrame = Library:Create('ImageLabel', {
@@ -1914,8 +1903,8 @@ do
         });
 
         local ToggleLabel = Library:CreateLabel({
-            Size = UDim2.new(1, -4, 1, 0);
-            Position = UDim2.new(0, 0, 0, 0);
+            Size = UDim2.new(0, 216, 1, 0);
+            Position = UDim2.new(0, 20, 0, 0);
             TextSize = 14;
             Text = Info.Text;
             TextXAlignment = Enum.TextXAlignment.Left;
@@ -1923,17 +1912,25 @@ do
             Parent = ToggleInner;
         });
 
-        Library:Create('UIPadding', {
-            PaddingLeft = UDim.new(0, 18);
-            PaddingRight = UDim.new(0, 0);
-            Parent = ToggleLabel;
-        });
+        local function UpdateLabelWidth()
+            local width = math.max(0, Container.AbsoluteSize.X - 32);
+            ToggleLabel.Size = UDim2.new(0, width, 1, 0);
+        end
+
+        UpdateLabelWidth()
+        Library:GiveSignal(Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateLabelWidth))
 
         Library:Create('UIListLayout', {
             Padding = UDim.new(0, 4);
             FillDirection = Enum.FillDirection.Horizontal;
             HorizontalAlignment = Enum.HorizontalAlignment.Right;
             SortOrder = Enum.SortOrder.LayoutOrder;
+            Parent = ToggleLabel;
+        });
+
+        Library:Create('UIPadding', {
+            PaddingLeft = UDim.new(0, 0);
+            PaddingRight = UDim.new(0, 4);
             Parent = ToggleLabel;
         });
 
