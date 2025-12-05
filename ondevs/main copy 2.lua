@@ -269,9 +269,11 @@ local function UpdateESPPreview()
 		ESPPreviewFrame.BoxFill.BackgroundTransparency = ESPSettings.FilledBoxTransparency or 0.2
 	end
 	
-	-- Update Chams (uses direct part coloring in ViewportFrame)
-	if ApplyChamsToModel then
-		ApplyChamsToModel(ESPSettings.ChamsESP == true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
+	-- Update Chams Highlight
+	if ChamsHighlight then
+		ChamsHighlight.Enabled = ESPSettings.ChamsESP == true
+		ChamsHighlight.FillColor = ESPSettings.ChamsColor or Color3.fromRGB(255, 120, 0)
+		ChamsHighlight.FillTransparency = ESPSettings.ChamsTransparency or 0.3
 	end
 	
 	-- Update Skeleton ESP visibility and colors (Universal R6/R15)
@@ -1644,55 +1646,24 @@ end
 -- Create initial character
 pcall(CreateCharacterModel)
 
--- Chams ESP for ViewportFrame uses direct part coloring (Highlight doesn't work in ViewportFrame)
--- Store original part colors for restore
-local OriginalPartColors = {}
-local ChamsEnabled = false
-
--- Function to apply chams effect to CharacterModel parts
-local function ApplyChamsToModel(enabled, fillColor, transparency)
-	if not CharacterModel then return end
-	
-	for _, part in ipairs(CharacterModel:GetDescendants()) do
-		if part:IsA('BasePart') then
-			if enabled then
-				-- Store original color if not stored
-				if not OriginalPartColors[part] then
-					OriginalPartColors[part] = {
-						Color = part.Color,
-						Material = part.Material,
-						Transparency = part.Transparency
-					}
-				end
-				-- Apply chams effect
-				part.Color = fillColor or Color3.fromRGB(255, 120, 0)
-				part.Material = Enum.Material.Neon -- Glowing effect
-				part.Transparency = transparency or 0.3
-			else
-				-- Restore original colors
-				if OriginalPartColors[part] then
-					part.Color = OriginalPartColors[part].Color
-					part.Material = OriginalPartColors[part].Material
-					part.Transparency = OriginalPartColors[part].Transparency
-				end
-			end
-		end
-	end
-	
-	ChamsEnabled = enabled
-end
-
-print('[ESP Preview] Chams System Initialized (ViewportFrame compatible)')
+-- Create Highlight for Chams ESP
+local ChamsHighlight = Instance.new('Highlight')
+ChamsHighlight.Name = 'ChamsESP'
+ChamsHighlight.Adornee = CharacterModel
+ChamsHighlight.FillColor = ESPSettings.ChamsColor
+ChamsHighlight.FillTransparency = ESPSettings.ChamsTransparency
+ChamsHighlight.OutlineColor = Color3.fromRGB(0, 0, 0)
+ChamsHighlight.OutlineTransparency = 0.5
+ChamsHighlight.Enabled = ESPSettings.ChamsESP
+ChamsHighlight.Parent = ViewportFrame
 
 -- Update character when respawning
 game.Players.LocalPlayer.CharacterAdded:Connect(function()
 	task.wait(0.5) -- Wait for character to fully load
-	-- Reset original colors before recreating model
-	OriginalPartColors = {}
 	pcall(CreateCharacterModel)
-	-- Re-apply chams if it was enabled
-	if ESPSettings.ChamsESP then
-		ApplyChamsToModel(true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
+	-- Reconnect Chams highlight to new model
+	if ChamsHighlight then
+		ChamsHighlight.Adornee = CharacterModel
 	end
 end)
 
@@ -2093,18 +2064,6 @@ local function UpdateDynamicESPPreview()
 		)
 		BoxOutline.Size = UDim2.fromOffset(math.floor(boxWidth), math.floor(boxHeight))
 	end
-	
-	-- ===== UPDATE CHAMS ESP =====
-	-- Chams in ViewportFrame uses direct part coloring (Highlight doesn't work)
-	local chamsEnabled = ESPSettings.ChamsESP == true
-	
-	-- Only update when state changes to avoid performance issues
-	if chamsEnabled ~= ChamsEnabled then
-		ApplyChamsToModel(chamsEnabled, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
-	elseif chamsEnabled then
-		-- Update colors if chams is enabled (in case color changed)
-		ApplyChamsToModel(true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
-	end
 end
 
 -- Update loop for dynamic ESP preview
@@ -2200,7 +2159,6 @@ ESPPreviewFrame = {
 	HealthText = HealthText;
 	ContentFrame = ContentFrame;
 	ESPOverlay = ESPOverlay;
-	ApplyChams = ApplyChamsToModel; -- Chams function for ViewportFrame
 	-- Update functions
 	Update = UpdateESPPreview;
 	UpdateAvatar = CreateCharacterModel;
