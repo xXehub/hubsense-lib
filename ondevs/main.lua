@@ -1854,6 +1854,7 @@ pcall(CreateCharacterModel)
 local OriginalPartColors = {}
 local PreviewChamsEnabled = false -- Renamed to avoid conflict with global ChamsEnabled
 local ChamsOutlineParts = {} -- Store outline parts for outline effect
+local ChamsOutlineEdgeOffsets = {} -- Store edge offsets for manual position updates
 
 -- Function to apply chams effect to CharacterModel parts (assign to forward declaration)
 ApplyChamsToModel = function(enabled, fillColor, transparency)
@@ -1891,10 +1892,13 @@ ApplyChamsToModel = function(enabled, fillColor, transparency)
 			{CFrame.new(halfX, 0, halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)},   -- back-right
 		}
 		
+		-- Store edge data for this part (for manual position updates)
+		ChamsOutlineEdgeOffsets[basePart] = {}
+		
 		for i, edge in ipairs(edges) do
 			local edgePart = Instance.new('Part')
 			edgePart.Name = 'Edge' .. i
-			edgePart.Anchored = false
+			edgePart.Anchored = true -- Anchored since we update manually
 			edgePart.CanCollide = false
 			edgePart.CanQuery = false
 			edgePart.CastShadow = false
@@ -1906,11 +1910,8 @@ ApplyChamsToModel = function(enabled, fillColor, transparency)
 			edgePart.CFrame = basePart.CFrame * edge[1]
 			edgePart.Parent = outlineFolder
 			
-			-- Weld to base part
-			local weld = Instance.new('WeldConstraint')
-			weld.Part0 = basePart
-			weld.Part1 = edgePart
-			weld.Parent = edgePart
+			-- Store offset for manual updates (WeldConstraint doesn't work in ViewportFrame)
+			ChamsOutlineEdgeOffsets[basePart][edgePart] = edge[1]
 		end
 		
 		return outlineFolder
@@ -1959,6 +1960,7 @@ ApplyChamsToModel = function(enabled, fillColor, transparency)
 					if ChamsOutlineParts[part] then
 						ChamsOutlineParts[part]:Destroy()
 						ChamsOutlineParts[part] = nil
+						ChamsOutlineEdgeOffsets[part] = nil
 					end
 				end
 			else
@@ -1972,6 +1974,7 @@ ApplyChamsToModel = function(enabled, fillColor, transparency)
 				if ChamsOutlineParts[part] then
 					ChamsOutlineParts[part]:Destroy()
 					ChamsOutlineParts[part] = nil
+					ChamsOutlineEdgeOffsets[part] = nil
 				end
 			end
 		end
@@ -1994,6 +1997,7 @@ game.Players.LocalPlayer.CharacterAdded:Connect(function()
 		end
 	end
 	ChamsOutlineParts = {}
+	ChamsOutlineEdgeOffsets = {} -- Clear edge offsets too
 	pcall(CreateCharacterModel)
 	-- Re-apply chams if it was enabled
 	if ESPSettings.ChamsESP then
@@ -2411,17 +2415,26 @@ local function UpdateDynamicESPPreview()
 		ApplyChamsToModel(false, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
 	end
 	
-	-- Update wireframe outline colors (position is handled by WeldConstraint)
+	-- Update wireframe outline positions and colors (manual update since WeldConstraint doesn't work in ViewportFrame)
 	if chamsEnabled and ESPSettings.ChamsOutline then
 		local outlineColor = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
 		local outlineTransparency = ESPSettings.ChamsOutlineTransparency or 0
 		
 		for part, outlineFolder in pairs(ChamsOutlineParts) do
 			if part and part.Parent and outlineFolder and outlineFolder.Parent then
+				-- Get edge offsets for this part
+				local edgeOffsets = ChamsOutlineEdgeOffsets[part]
+				
 				for _, edgePart in ipairs(outlineFolder:GetChildren()) do
 					if edgePart:IsA('BasePart') then
+						-- Update color and transparency
 						edgePart.Color = outlineColor
 						edgePart.Transparency = outlineTransparency
+						
+						-- Update position based on stored offset (follows part rotation)
+						if edgeOffsets and edgeOffsets[edgePart] then
+							edgePart.CFrame = part.CFrame * edgeOffsets[edgePart]
+						end
 					end
 				end
 			end
