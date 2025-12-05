@@ -45,6 +45,7 @@ local Library = {
 
     Signals = {};
     ScreenGui = ScreenGui;
+    InlineColorPickerWidth = 216;
 };
 
 local RainbowStep = 0
@@ -458,6 +459,34 @@ do
     function Funcs:AddColorPicker(Idx, Info)
         local ToggleLabel = self.TextLabel;
         -- local Container = self.Container;
+
+        local function alignStandaloneColorPicker()
+            if not ToggleLabel then
+                return
+            end
+
+            local Padding = ToggleLabel:FindFirstChild('InlineColorPickerPadding') or Library:Create('UIPadding', {
+                Name = 'InlineColorPickerPadding';
+                Parent = ToggleLabel;
+            })
+
+            local function UpdatePadding()
+                local targetWidth = Library.InlineColorPickerWidth or 216
+                local extra = math.max(0, ToggleLabel.AbsoluteSize.X - targetWidth)
+                Padding.PaddingRight = UDim.new(0, extra)
+            end
+
+            UpdatePadding()
+
+            if not Padding:GetAttribute('HasInlineConnection') then
+                Padding:SetAttribute('HasInlineConnection', true)
+                Library:GiveSignal(ToggleLabel:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdatePadding))
+            end
+        end
+
+        if self.Type == 'Label' then
+            alignStandaloneColorPicker()
+        end
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
 
@@ -1427,6 +1456,7 @@ do
 
         Label.TextLabel = TextLabel;
         Label.Container = Container;
+        Label.Type = 'Label';
 
         function Label:SetText(Text)
             TextLabel.Text = Text
