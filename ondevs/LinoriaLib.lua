@@ -459,17 +459,17 @@ do
         local ToggleLabel = self.TextLabel;
         -- local Container = self.Container;
 
-        if self.Type == 'Toggle' and ToggleLabel then
-            local Padding = ToggleLabel:FindFirstChild('InlineAddonPadding')
-
-            if not Padding then
-                Padding = Library:Create('UIPadding', {
-                    Name = 'InlineAddonPadding';
-                    Parent = ToggleLabel;
-                })
+        if self.Type == 'Toggle' and ToggleLabel and self.Container then
+            local function UpdateToggleLabelWidth()
+                local width = self.Container.AbsoluteSize.X
+                if width and width > 0 then
+                    local padding = 6
+                    ToggleLabel.Size = UDim2.new(0, math.max(0, width - padding), 1, 0)
+                end
             end
 
-            Padding.PaddingRight = UDim.new(0, 12)
+            task.defer(UpdateToggleLabelWidth)
+            Library:GiveSignal(self.Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth))
         end
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
