@@ -459,7 +459,9 @@ do
         local ToggleLabel = self.TextLabel;
         -- local Container = self.Container;
 
-        if self.Type == 'Toggle' and ToggleLabel and self.Container then
+        -- Update ToggleLabel width untuk positioning yang sama dengan Label
+        if self.Type == 'Toggle' and ToggleLabel and self.Container and not self._WidthUpdaterSet then
+            self._WidthUpdaterSet = true
             local function UpdateToggleLabelWidth()
                 local containerWidth = self.Container.AbsoluteSize.X
                 if containerWidth and containerWidth > 0 then
@@ -1068,7 +1070,9 @@ do
         local ToggleLabel = self.TextLabel;
         local Container = self.Container;
 
-        if ParentObj.Type == 'Toggle' and ToggleLabel and Container then
+        -- Update ToggleLabel width untuk positioning yang sama dengan Label
+        if ParentObj.Type == 'Toggle' and ToggleLabel and Container and not ParentObj._WidthUpdaterSet then
+            ParentObj._WidthUpdaterSet = true
             local function UpdateToggleLabelWidth()
                 local containerWidth = Container.AbsoluteSize.X
                 if containerWidth and containerWidth > 0 then
