@@ -459,17 +459,19 @@ do
         local ToggleLabel = self.TextLabel;
         -- local Container = self.Container;
 
-        if self.Type == 'Toggle' and ToggleLabel and self.Container then
+        if self.Type == 'Toggle' and ToggleLabel then
+            local SizeSource = ToggleLabel.Parent or ToggleLabel
+            local padding = 18
+
             local function UpdateToggleLabelWidth()
-                local containerWidth = self.Container.AbsoluteSize.X
-                if containerWidth and containerWidth > 0 then
-                    local padding = 200 -- fine tune inline picker alignment
-                    ToggleLabel.Size = UDim2.new(0, math.max(0, containerWidth - padding), 1, 0)
+                local width = SizeSource.AbsoluteSize.X
+                if width and width > 0 then
+                    ToggleLabel.Size = UDim2.new(0, math.max(0, width - padding), 1, 0)
                 end
             end
 
             task.defer(UpdateToggleLabelWidth)
-            Library:GiveSignal(self.Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth))
+            Library:GiveSignal(SizeSource:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth))
         end
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
