@@ -1137,14 +1137,14 @@ ESPBox:AddToggle('ShowBox', {
 	end
 })
 
-ESPBox:AddLabel('Health bar color'):AddColorPicker('HealthBarColor', {
-	Default = Color3.fromRGB(0, 255, 0),
-	Title = 'Health Bar Color',
-	Callback = function(Value)
-		ESPSettings.HealthBarColor = Value
-		UpdateESPPreview()
-	end
-})
+-- ESPBox:AddLabel('Health bar color'):AddColorPicker('HealthBarColor', {
+-- 	Default = Color3.fromRGB(0, 255, 0),
+-- 	Title = 'Health Bar Color',
+-- 	Callback = function(Value)
+-- 		ESPSettings.HealthBarColor = Value
+-- 		UpdateESPPreview()
+-- 	end
+-- })
 
 ESPBox:AddToggle('ShowHealth', {
 	Text = 'Show Health',
