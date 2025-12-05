@@ -1399,13 +1399,13 @@ ChamsTab:AddToggle('ChamsESP', {
 	SyncToggleState = true,
 	Mode = 'Toggle',
 	Text = 'Chams Keybind',
-	NoUI = false
-})
-
-ChamsTab:AddLabel(''):AddColorPicker('ChamsColor', {
+	NoUI = false,
+	LayoutOrder = 2
+}):AddColorPicker('ChamsColor', {
 	Default = Color3.fromRGB(255, 120, 0),
 	Title = 'Chams Fill Color',
 	Transparency = 0.3,
+	LayoutOrder = 1,
 	Callback = function(Value)
 		ESPSettings.ChamsColor = Value
 		-- Get transparency from Options
