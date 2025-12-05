@@ -45,7 +45,6 @@ local Library = {
 
     Signals = {};
     ScreenGui = ScreenGui;
-    InlineColorPickerWidth = 216;
 };
 
 local RainbowStep = 0
@@ -460,32 +459,16 @@ do
         local ToggleLabel = self.TextLabel;
         -- local Container = self.Container;
 
-        local function alignStandaloneColorPicker()
-            if not ToggleLabel then
-                return
+        if self.Type == 'Toggle' and ToggleLabel and self.Container then
+            local function UpdateToggleLabelWidth()
+                local containerWidth = self.Container.AbsoluteSize.X
+                if containerWidth and containerWidth > 0 then
+                    ToggleLabel.Size = UDim2.new(0, math.max(0, containerWidth - 4), 1, 0)
+                end
             end
 
-            local Padding = ToggleLabel:FindFirstChild('InlineColorPickerPadding') or Library:Create('UIPadding', {
-                Name = 'InlineColorPickerPadding';
-                Parent = ToggleLabel;
-            })
-
-            local function UpdatePadding()
-                local targetWidth = Library.InlineColorPickerWidth or 216
-                local extra = math.max(0, ToggleLabel.AbsoluteSize.X - targetWidth)
-                Padding.PaddingRight = UDim.new(0, extra)
-            end
-
-            UpdatePadding()
-
-            if not Padding:GetAttribute('HasInlineConnection') then
-                Padding:SetAttribute('HasInlineConnection', true)
-                Library:GiveSignal(ToggleLabel:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdatePadding))
-            end
-        end
-
-        if self.Type == 'Label' then
-            alignStandaloneColorPicker()
+            task.defer(UpdateToggleLabelWidth)
+            Library:GiveSignal(self.Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth))
         end
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
@@ -1456,7 +1439,6 @@ do
 
         Label.TextLabel = TextLabel;
         Label.Container = Container;
-        Label.Type = 'Label';
 
         function Label:SetText(Text)
             TextLabel.Text = Text
