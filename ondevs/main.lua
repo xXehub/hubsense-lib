@@ -280,13 +280,19 @@ local function UpdateESPPreview()
 	local skeletonColor = ESPSettings.SkeletonColor or Color3.fromRGB(255, 255, 255)
 	
 	-- Update all skeleton lines (works with dynamic skeleton system)
-	if ESPPreviewFrame.SkeletonLines then
-		for _, line in ipairs(ESPPreviewFrame.SkeletonLines) do
+	if SkeletonLines then
+		for _, line in pairs(SkeletonLines) do
 			if line and line.Parent then
 				line.Visible = skeletonVisible
 				line.BackgroundColor3 = skeletonColor
 			end
 		end
+	end
+	
+	-- Update head dot
+	if HeadDotFrame then
+		HeadDotFrame.Visible = skeletonVisible
+		HeadDotFrame.BackgroundColor3 = skeletonColor
 	end
 	
 	-- Update Name Label
@@ -1821,6 +1827,7 @@ print('[ESP Preview] Distance and Labels Created')
 
 -- Initialize SkeletonLines array globally
 SkeletonLines = {}
+HeadDotFrame = nil
 
 local function UpdateDynamicESPPreview()
 	if not CharacterModel or not ViewportCamera or not CharacterModel.PrimaryPart then return end
@@ -1830,19 +1837,22 @@ local function UpdateDynamicESPPreview()
 	local hrp = char.PrimaryPart or char:FindFirstChild('HumanoidRootPart')
 	if not hrp then return end
 	
-	-- Calculate 3D to 2D projection (FIXED for ViewportFrame)
+	-- Calculate 3D to 2D projection for ViewportFrame
 	local function WorldToViewport(position)
 		local vpSize = ViewportFrame.AbsoluteSize
+		if vpSize.X == 0 or vpSize.Y == 0 then return Vector2.new(0, 0), false end
 		
-		-- WorldToViewportPoint returns normalized coordinates (0-1 range)
 		local screenPos, onScreen = camera:WorldToViewportPoint(position)
 		
-		-- Convert normalized coordinates to actual pixel coordinates
-		-- screenPos.X and screenPos.Y are already in 0-1 range for ViewportFrame
-		local x = screenPos.X * vpSize.X
-		local y = screenPos.Y * vpSize.Y
+		-- For ViewportFrame, WorldToViewportPoint returns screen coordinates
+		-- We need to check if screenPos is within viewport bounds
+		local x = screenPos.X
+		local y = screenPos.Y
 		
-		return Vector2.new(x, y), onScreen
+		-- Check if point is in front of camera (Z > 0)
+		local inFront = screenPos.Z > 0
+		
+		return Vector2.new(x, y), inFront and onScreen
 	end
 	
 	-- ===== UPDATE BOX ESP (using same logic as CalculateBox) =====
@@ -1868,86 +1878,155 @@ local function UpdateDynamicESPPreview()
 		)
 		BoxOutline.Size = UDim2.fromOffset(math.floor(boxWidth), math.floor(boxHeight))
 		
-		-- ===== UPDATE SKELETON ESP (using EXACT same logic as UpdateESP) =====
+		-- ===== UPDATE SKELETON ESP =====
 		if ESPSettings.SkeletonESP then
-			-- Get body parts (same as in-game ESP)
+			-- Get body parts based on rig type
 			local head = char:FindFirstChild('Head')
-			local torso = char:FindFirstChild('UpperTorso') or char:FindFirstChild('Torso')
-			local leftArm = char:FindFirstChild('LeftUpperArm') or char:FindFirstChild('Left Arm')
-			local rightArm = char:FindFirstChild('RightUpperArm') or char:FindFirstChild('Right Arm')
-			local leftLeg = char:FindFirstChild('LeftUpperLeg') or char:FindFirstChild('Left Leg')
-			local rightLeg = char:FindFirstChild('RightUpperLeg') or char:FindFirstChild('Right Leg')
 			
-			local parts = {head, torso, leftArm, rightArm, leftLeg, rightLeg}
-			local validParts = true
+			-- R15 parts
+			local upperTorso = char:FindFirstChild('UpperTorso')
+			local lowerTorso = char:FindFirstChild('LowerTorso')
+			local leftUpperArm = char:FindFirstChild('LeftUpperArm')
+			local leftLowerArm = char:FindFirstChild('LeftLowerArm')
+			local leftHand = char:FindFirstChild('LeftHand')
+			local rightUpperArm = char:FindFirstChild('RightUpperArm')
+			local rightLowerArm = char:FindFirstChild('RightLowerArm')
+			local rightHand = char:FindFirstChild('RightHand')
+			local leftUpperLeg = char:FindFirstChild('LeftUpperLeg')
+			local leftLowerLeg = char:FindFirstChild('LeftLowerLeg')
+			local leftFoot = char:FindFirstChild('LeftFoot')
+			local rightUpperLeg = char:FindFirstChild('RightUpperLeg')
+			local rightLowerLeg = char:FindFirstChild('RightLowerLeg')
+			local rightFoot = char:FindFirstChild('RightFoot')
 			
-			for _, part in pairs(parts) do
-				if not part then
-					validParts = false
-					break
-				end
+			-- R6 parts (fallback)
+			local torso = char:FindFirstChild('Torso')
+			local leftArm = char:FindFirstChild('Left Arm')
+			local rightArm = char:FindFirstChild('Right Arm')
+			local leftLeg = char:FindFirstChild('Left Leg')
+			local rightLeg = char:FindFirstChild('Right Leg')
+			
+			local connections = {}
+			
+			if upperTorso then
+				-- R15 skeleton (14 connections for full body)
+				connections = {
+					{head, upperTorso},           -- 1: Neck
+					{upperTorso, lowerTorso},     -- 2: Spine
+					{upperTorso, leftUpperArm},   -- 3: Left shoulder
+					{leftUpperArm, leftLowerArm}, -- 4: Left elbow
+					{leftLowerArm, leftHand},     -- 5: Left wrist
+					{upperTorso, rightUpperArm},  -- 6: Right shoulder
+					{rightUpperArm, rightLowerArm}, -- 7: Right elbow
+					{rightLowerArm, rightHand},   -- 8: Right wrist
+					{lowerTorso, leftUpperLeg},   -- 9: Left hip
+					{leftUpperLeg, leftLowerLeg}, -- 10: Left knee
+					{leftLowerLeg, leftFoot},     -- 11: Left ankle
+					{lowerTorso, rightUpperLeg},  -- 12: Right hip
+					{rightUpperLeg, rightLowerLeg}, -- 13: Right knee
+					{rightLowerLeg, rightFoot},   -- 14: Right ankle
+				}
+			elseif torso then
+				-- R6 skeleton (6 connections)
+				connections = {
+					{head, torso},      -- 1: Neck
+					{torso, leftArm},   -- 2: Left shoulder
+					{torso, rightArm},  -- 3: Right shoulder
+					{torso, leftLeg},   -- 4: Left hip
+					{torso, rightLeg},  -- 5: Right hip
+					{leftLeg, rightLeg} -- 6: Pelvis (optional)
+				}
 			end
 			
-			if validParts then
-				-- Use EXACT same connections as in-game ESP (6 lines for simplicity)
-				local connections = {
-					{head, torso}, -- Neck
-					{torso, leftArm}, -- Left shoulder
-					{torso, rightArm}, -- Right shoulder
-					{torso, leftLeg}, -- Left hip
-					{torso, rightLeg}, -- Right hip
-					{leftLeg, rightLeg} -- Pelvis
-				}
-				
-				-- Draw lines (same logic as UpdateESP)
-				for i = 1, 6 do
+			-- Draw/update skeleton lines
+			local lineCount = #connections
+			for i = 1, math.max(lineCount, 14) do
+				if i <= lineCount and connections[i] then
 					local from, to = connections[i][1], connections[i][2]
-					local fromPos, fromOnScreen = WorldToViewport(from.Position)
-					local toPos, toOnScreen = WorldToViewport(to.Position)
 					
-					if fromOnScreen and toOnScreen then
-						-- Get or create line
-						if not SkeletonLines[i] then
-							SkeletonLines[i] = Library:Create('Frame', {
-								BackgroundColor3 = ESPSettings.SkeletonColor;
-								BorderSizePixel = 0;
-								AnchorPoint = Vector2.new(0, 0.5); -- CRITICAL: Anchor at middle-left for proper rotation
-								ZIndex = 25;
-								Parent = ESPOverlay;
-							})
+					if from and to then
+						local fromPos, fromOnScreen = WorldToViewport(from.Position)
+						local toPos, toOnScreen = WorldToViewport(to.Position)
+						
+						if fromOnScreen and toOnScreen then
+							-- Create line if needed
+							if not SkeletonLines[i] then
+								SkeletonLines[i] = Library:Create('Frame', {
+									BackgroundColor3 = ESPSettings.SkeletonColor;
+									BorderSizePixel = 0;
+									AnchorPoint = Vector2.new(0, 0.5);
+									ZIndex = 25;
+									Parent = ESPOverlay;
+								})
+							end
+							
+							local line = SkeletonLines[i]
+							local dx = toPos.X - fromPos.X
+							local dy = toPos.Y - fromPos.Y
+							local length = math.sqrt(dx * dx + dy * dy)
+							local angle = math.deg(math.atan2(dy, dx))
+							
+							line.Visible = true
+							line.BackgroundColor3 = ESPSettings.SkeletonColor
+							line.Size = UDim2.fromOffset(math.max(1, math.floor(length)), 2)
+							line.Position = UDim2.fromOffset(math.floor(fromPos.X), math.floor(fromPos.Y))
+							line.Rotation = angle
+						else
+							if SkeletonLines[i] then
+								SkeletonLines[i].Visible = false
+							end
 						end
-						
-						local line = SkeletonLines[i]
-						local dx = toPos.X - fromPos.X
-						local dy = toPos.Y - fromPos.Y
-						local length = math.sqrt(dx * dx + dy * dy)
-						local angle = math.deg(math.atan2(dy, dx))
-						
-						line.Visible = true
-						line.BackgroundColor3 = ESPSettings.SkeletonColor
-						line.Size = UDim2.fromOffset(math.max(1, math.floor(length)), 2)
-						line.Position = UDim2.fromOffset(math.floor(fromPos.X), math.floor(fromPos.Y))
-						line.Rotation = angle
 					else
 						if SkeletonLines[i] then
 							SkeletonLines[i].Visible = false
 						end
 					end
-				end
-			else
-				-- Hide all lines if parts invalid
-				for i = 1, 6 do
+				else
+					-- Hide extra lines
 					if SkeletonLines[i] then
 						SkeletonLines[i].Visible = false
 					end
 				end
 			end
+			
+			-- Draw head dot
+			if head then
+				local headPos, headOnScreen = WorldToViewport(head.Position)
+				if headOnScreen then
+					if not HeadDotFrame then
+						HeadDotFrame = Library:Create('Frame', {
+							BackgroundColor3 = ESPSettings.SkeletonColor;
+							BorderSizePixel = 0;
+							AnchorPoint = Vector2.new(0.5, 0.5);
+							ZIndex = 26;
+							Parent = ESPOverlay;
+						})
+						Library:Create('UICorner', {
+							CornerRadius = UDim.new(1, 0);
+							Parent = HeadDotFrame;
+						})
+					end
+					
+					local dotSize = 8
+					HeadDotFrame.Visible = true
+					HeadDotFrame.BackgroundColor3 = ESPSettings.SkeletonColor
+					HeadDotFrame.Size = UDim2.fromOffset(dotSize, dotSize)
+					HeadDotFrame.Position = UDim2.fromOffset(math.floor(headPos.X), math.floor(headPos.Y))
+				else
+					if HeadDotFrame then
+						HeadDotFrame.Visible = false
+					end
+				end
+			end
 		else
 			-- Hide skeleton if disabled
-			for i = 1, 6 do
+			for i = 1, 14 do
 				if SkeletonLines[i] then
 					SkeletonLines[i].Visible = false
 				end
+			end
+			if HeadDotFrame then
+				HeadDotFrame.Visible = false
 			end
 		end
 	end
@@ -2027,6 +2106,7 @@ ESPPreviewFrame = {
 	BoxFill = BoxFill;  -- Filled Box reference
 	SkeletonContainer = SkeletonContainer;
 	SkeletonLines = SkeletonLines; -- Store all skeleton lines (will be updated)
+	HeadDotFrame = HeadDotFrame; -- Head dot circle
 	-- Backward compatibility
 	HeadToTorso = HeadToTorso;
 	TorsoToLeftArm = TorsoToLeftArm;
