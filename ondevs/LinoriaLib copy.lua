@@ -463,8 +463,7 @@ do
             local function UpdateToggleLabelWidth()
                 local containerWidth = self.Container.AbsoluteSize.X
                 if containerWidth and containerWidth > 0 then
-                    local padding = 8 -- tuck inline picker inside card edge
-                    ToggleLabel.Size = UDim2.new(0, math.max(0, containerWidth - padding), 1, 0)
+                    ToggleLabel.Size = UDim2.new(0, math.max(0, containerWidth - 4), 1, 0)
                 end
             end
 
