@@ -22,19 +22,11 @@ local currentSearchResults = {}
 
 -- ESP Variables
 local ESPEnabled = false
-local ChamsEnabled = false -- Separate from ESP
 local ESPConnections = {}
-local ChamsConnections = {} -- Separate connections for Chams
 local ESPObjects = {}
-local ChamsObjects = {} -- Separate storage for Chams highlights
 local ESPPreviewFrame = nil
 local DynamicESPConnection = nil -- Connection for ESP preview update loop
 local SimulatedDistance = 150 -- Simulated distance in studs for ESP preview scaling
-
--- Forward declarations for functions defined later
-local ApplyChamsToModel = nil
-local UpdateESPPreview = nil
-
 local ESPSettings = {
 	ShowName = true,
 	ShowDistance = true,
@@ -52,7 +44,6 @@ local ESPSettings = {
 	SkeletonColor = Color3.fromRGB(255, 255, 255),
 	DistanceColor = Color3.fromRGB(180, 180, 180),
 	TracerColor = Color3.fromRGB(255, 255, 255),
-	LineColor = Color3.fromRGB(255, 255, 255),
 	-- Chams Settings
 	ChamsColor = Color3.fromRGB(255, 120, 0),
 	ChamsTransparency = 0.3,
@@ -257,7 +248,7 @@ local function RotateCharacter(angleDegrees)
 end
 
 -- ==================== ESP PREVIEW UPDATE FUNCTION ====================
-UpdateESPPreview = function()
+local function UpdateESPPreview()
 	if not ESPPreviewFrame then return end
 	
 	-- Update Box ESP borders
@@ -285,11 +276,8 @@ UpdateESPPreview = function()
 	end
 	
 	-- Update Chams (uses direct part coloring in ViewportFrame)
-	-- Force update chams every time UpdateESPPreview is called
-	if ApplyChamsToModel and CharacterModel then
-		pcall(function()
-			ApplyChamsToModel(ESPSettings.ChamsESP == true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
-		end)
+	if ApplyChamsToModel then
+		ApplyChamsToModel(ESPSettings.ChamsESP == true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
 	end
 	
 	-- Update Skeleton ESP visibility and colors (Universal R6/R15)
@@ -431,7 +419,7 @@ local function CreateESP(player)
 	
 	-- Set default properties for tracer
 	espObj.Tracer.Thickness = 1
-	espObj.Tracer.Color = ESPSettings.LineColor
+	espObj.Tracer.Color = ESPSettings.BoxColor
 	espObj.Tracer.Transparency = 1
 	
 	-- Set default properties for text
@@ -483,7 +471,19 @@ local function CreateESP(player)
 	espObj.BoxFilled.Color = ESPSettings.BoxColor
 	espObj.BoxFilled.Transparency = 1 - ESPSettings.FilledBoxTransparency
 	
-	-- Note: Chams (Highlight) is now handled separately by ToggleChams
+	-- Create Chams (Highlight) for 3D character
+	if char then
+		local highlight = Instance.new('Highlight')
+		highlight.Name = 'ESPChams'
+		highlight.Adornee = char
+		highlight.FillColor = ESPSettings.ChamsColor
+		highlight.FillTransparency = ESPSettings.ChamsTransparency
+		highlight.OutlineColor = Color3.fromRGB(0, 0, 0)
+		highlight.OutlineTransparency = 0.5
+		highlight.Enabled = ESPSettings.ChamsESP
+		highlight.Parent = char
+		espObj.Chams = highlight
+	end
 end
 
 local function RemoveESP(player)
@@ -502,6 +502,12 @@ local function RemoveESP(player)
 		if espObj.HealthBarOutline then espObj.HealthBarOutline:Remove() end
 		if espObj.HeadDot then espObj.HeadDot:Remove() end
 		if espObj.HeadDotOutline then espObj.HeadDotOutline:Remove() end
+		
+		-- Remove Chams (Highlight)
+		if espObj.Chams then
+			espObj.Chams:Destroy()
+			espObj.Chams = nil
+		end
 		
 		if espObj.Skeleton then
 			for i = 1, 6 do
@@ -571,7 +577,14 @@ local function UpdateESP()
 					espObj.BoxFilled.Visible = false
 				end
 				
-				-- Note: Chams is now handled separately by UpdateChams
+				-- Update Chams (Highlight)
+				if ESPSettings.ChamsESP and espObj.Chams then
+					espObj.Chams.Enabled = true
+					espObj.Chams.FillColor = ESPSettings.ChamsColor
+					espObj.Chams.FillTransparency = ESPSettings.ChamsTransparency
+				elseif espObj.Chams then
+					espObj.Chams.Enabled = false
+				end
 				
 				-- Update Tracer
 				if ESPSettings.ShowBox then
@@ -579,7 +592,7 @@ local function UpdateESP()
 					local viewportSize = camera.ViewportSize
 					espObj.Tracer.From = Vector2.new(viewportSize.X / 2, viewportSize.Y)
 					espObj.Tracer.To = Vector2.new(boxPosition.X + boxSize.X / 2, boxPosition.Y + boxSize.Y)
-					espObj.Tracer.Color = ESPSettings.LineColor
+					espObj.Tracer.Color = ESPSettings.BoxColor
 				else
 					espObj.Tracer.Visible = false
 				end
@@ -705,10 +718,11 @@ local function UpdateESP()
 					end
 				end
 			else
-				-- Hide all ESP elements (Chams handled separately)
+				-- Hide all ESP elements
 				if espObj.Box then espObj.Box.Visible = false end
 				if espObj.BoxOutline then espObj.BoxOutline.Visible = false end
 				if espObj.BoxFilled then espObj.BoxFilled.Visible = false end
+				if espObj.Chams then espObj.Chams.Enabled = false end
 				if espObj.Tracer then espObj.Tracer.Visible = false end
 				if espObj.NameText then espObj.NameText.Visible = false end
 				if espObj.DistanceText then espObj.DistanceText.Visible = false end
@@ -771,151 +785,6 @@ local function ToggleESP(enabled)
 		end
 		ESPConnections = {}
 	end
-end
-
--- ==================== CHAMS SYSTEM (INDEPENDENT FROM ESP) ====================
-local function IsPlayerVisible(player)
-	local localPlayer = game.Players.LocalPlayer
-	if not localPlayer.Character or not localPlayer.Character:FindFirstChild('Head') then return false end
-	local localHead = localPlayer.Character.Head
-	
-	if not player.Character or not player.Character:FindFirstChild('HumanoidRootPart') then return false end
-	local targetHRP = player.Character.HumanoidRootPart
-	
-	-- Raycast from local player's head to target's HumanoidRootPart
-	local origin = localHead.Position
-	local direction = (targetHRP.Position - origin)
-	local distance = direction.Magnitude
-	
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	raycastParams.FilterDescendantsInstances = {localPlayer.Character, player.Character}
-	
-	local result = workspace:Raycast(origin, direction.Unit * distance, raycastParams)
-	
-	-- If raycast hits nothing or hits further than target, player is visible
-	return result == nil or result.Distance >= distance - 1
-end
-
-local function CreateChams(player)
-	if player == game.Players.LocalPlayer then return end
-	if ChamsObjects[player] then return end
-	
-	local char = player.Character
-	if not char then return end
-	
-	local highlight = Instance.new('Highlight')
-	highlight.Name = 'Chams'
-	highlight.Adornee = char
-	highlight.FillColor = ESPSettings.ChamsColor
-	highlight.FillTransparency = ESPSettings.ChamsTransparency
-	highlight.OutlineColor = ESPSettings.ChamsOutlineColor
-	highlight.OutlineTransparency = ESPSettings.ChamsOutline and ESPSettings.ChamsOutlineTransparency or 1
-	highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	highlight.Enabled = true
-	highlight.Parent = char
-	
-	ChamsObjects[player] = highlight
-end
-
-local function RemoveChams(player)
-	if ChamsObjects[player] then
-		ChamsObjects[player]:Destroy()
-		ChamsObjects[player] = nil
-	end
-end
-
-local function UpdateChams()
-	local localPlayer = game.Players.LocalPlayer
-	if not localPlayer.Character or not localPlayer.Character:FindFirstChild('HumanoidRootPart') then return end
-	local localHRP = localPlayer.Character.HumanoidRootPart
-	
-	for player, highlight in pairs(ChamsObjects) do
-		if player and player.Character and player.Character:FindFirstChild('HumanoidRootPart') then
-			local char = player.Character
-			local hrp = char:FindFirstChild('HumanoidRootPart')
-			local humanoid = char:FindFirstChild('Humanoid')
-			
-			local distance = (localHRP.Position - hrp.Position).Magnitude
-			
-			-- Check distance and team
-			local shouldShow = distance <= ESPSettings.MaxDistance
-			if ESPSettings.TeamCheck and player.Team == localPlayer.Team then
-				shouldShow = false
-			end
-			
-			if humanoid and humanoid.Health <= 0 then
-				shouldShow = false
-			end
-			
-			-- Check visibility if ChamsVisibleOnly is enabled
-			if shouldShow and ESPSettings.ChamsVisibleOnly then
-				shouldShow = IsPlayerVisible(player)
-			end
-			
-			if shouldShow then
-				highlight.Enabled = true
-				highlight.FillColor = ESPSettings.ChamsColor
-				highlight.FillTransparency = ESPSettings.ChamsTransparency
-				highlight.OutlineColor = ESPSettings.ChamsOutlineColor
-				highlight.OutlineTransparency = ESPSettings.ChamsOutline and ESPSettings.ChamsOutlineTransparency or 1
-			else
-				highlight.Enabled = false
-			end
-		else
-			RemoveChams(player)
-		end
-	end
-end
-
-local function ToggleChams(enabled)
-	ChamsEnabled = enabled
-	ESPSettings.ChamsESP = enabled
-	
-	if enabled then
-		-- Create Chams for all existing players
-		for _, player in pairs(game.Players:GetPlayers()) do
-			if player ~= game.Players.LocalPlayer then
-				if player.Character then
-					CreateChams(player)
-				end
-			end
-		end
-		
-		-- Listen for new players and character spawns
-		ChamsConnections.PlayerAdded = game.Players.PlayerAdded:Connect(function(player)
-			if player ~= game.Players.LocalPlayer then
-				player.CharacterAdded:Connect(function()
-					wait(0.5)
-					if ChamsEnabled then CreateChams(player) end
-				end)
-				if player.Character then CreateChams(player) end
-			end
-		end)
-		
-		ChamsConnections.PlayerRemoving = game.Players.PlayerRemoving:Connect(function(player)
-			RemoveChams(player)
-		end)
-		
-		-- Update loop
-		ChamsConnections.UpdateLoop = game:GetService('RunService').RenderStepped:Connect(function()
-			if ChamsEnabled then UpdateChams() end
-		end)
-	else
-		-- Remove all Chams
-		for player, _ in pairs(ChamsObjects) do
-			RemoveChams(player)
-		end
-		
-		-- Disconnect all connections
-		for _, connection in pairs(ChamsConnections) do
-			connection:Disconnect()
-		end
-		ChamsConnections = {}
-	end
-	
-	-- Update preview
-	UpdateESPPreview()
 end
 
 -- Try load external game feature logic from epic.lua via executor
@@ -1238,19 +1107,6 @@ ESPTab:AddToggle('EnableESP', {
 	NoUI = false
 })
 
-ESPTab:AddSlider('MaxDistance', {
-	Text = 'Max Distance',
-	Default = 1000,
-	Min = 100,
-	Max = 5000,
-	Rounding = 0,
-	Suffix = ' studs',
-	Compact = false,
-	Callback = function(Value)
-		ESPSettings.MaxDistance = Value
-	end
-})
-
 ESPTab:AddToggle('ShowName', {
 	Text = 'Show Names',
 	Default = true,
@@ -1262,7 +1118,6 @@ ESPTab:AddToggle('ShowName', {
 }):AddColorPicker('NameColor', {
 	Default = Color3.fromRGB(255, 255, 255),
 	Title = 'Name Color',
-	Transparency = 0,
 	Callback = function(Value)
 		ESPSettings.NameColor = Value
 		UpdateESPPreview()
@@ -1280,7 +1135,6 @@ ESPTab:AddToggle('ShowDistance', {
 }):AddColorPicker('DistanceColor', {
 	Default = Color3.fromRGB(180, 180, 180),
 	Title = 'Distance Color',
-	Transparency = 0,
 	Callback = function(Value)
 		ESPSettings.DistanceColor = Value
 		UpdateESPPreview()
@@ -1298,7 +1152,6 @@ ESPTab:AddToggle('ShowHealth', {
 }):AddColorPicker('HealthBarColor', {
 	Default = Color3.fromRGB(0, 255, 0),
 	Title = 'Health Bar Color',
-	Transparency = 0,
 	Callback = function(Value)
 		ESPSettings.HealthBarColor = Value
 		UpdateESPPreview()
@@ -1311,14 +1164,6 @@ ESPTab:AddToggle('ShowBox', {
 	Tooltip = 'Display line around players',
 	Callback = function(Value)
 		ESPSettings.ShowBox = Value
-		UpdateESPPreview()
-	end
-}):AddColorPicker('LineColor', {
-	Default = Color3.fromRGB(255, 255, 255),
-	Title = 'Line Color',
-	Transparency = 0,
-	Callback = function(Value)
-		ESPSettings.LineColor = Value
 		UpdateESPPreview()
 	end
 })
@@ -1334,7 +1179,6 @@ ESPTab:AddToggle('BoxESP', {
 }):AddColorPicker('BoxColor', {
 	Default = Color3.fromRGB(255, 0, 0),
 	Title = 'Box Color',
-	Transparency = 0,
 	Callback = function(Value)
 		ESPSettings.BoxColor = Value
 		UpdateESPPreview()
@@ -1355,7 +1199,6 @@ ESPTab:AddToggle('SkeletonESP', {
 }):AddColorPicker('SkeletonColor', {
 	Default = Color3.fromRGB(255, 255, 255),
 	Title = 'Skeleton Color',
-	Transparency = 0,
 	Callback = function(Value)
 		ESPSettings.SkeletonColor = Value
 		if ESPPreviewFrame and ESPPreviewFrame.UpdateSkeleton then
@@ -1384,6 +1227,18 @@ ESPTab:AddToggle('TeamCheck', {
 	end
 })
 
+ESPTab:AddSlider('MaxDistance', {
+	Text = 'Max Distance',
+	Default = 1000,
+	Min = 100,
+	Max = 5000,
+	Rounding = 0,
+	Compact = false,
+	Callback = function(Value)
+		ESPSettings.MaxDistance = Value
+	end
+})
+
 -- ===== CHAMS TAB =====
 local ChamsTab = ESPTabbox:AddTab('Chams')
 
@@ -1392,41 +1247,28 @@ ChamsTab:AddToggle('ChamsESP', {
 	Default = false,
 	Tooltip = 'Highlight player body parts with color overlay',
 	Callback = function(Value)
-		ToggleChams(Value)
+		ESPSettings.ChamsESP = Value
+		UpdateESPPreview()
 	end
-}):AddKeyPicker('ChamsKeybind', {
-	Default = 'F3',
-	SyncToggleState = true,
-	Mode = 'Toggle',
-	Text = 'Chams Keybind',
-	NoUI = false
-})
-
-ChamsTab:AddLabel(''):AddColorPicker('ChamsColor', {
+}):AddColorPicker('ChamsColor', {
 	Default = Color3.fromRGB(255, 120, 0),
 	Title = 'Chams Fill Color',
-	Transparency = 0.3,
 	Callback = function(Value)
 		ESPSettings.ChamsColor = Value
-		-- Get transparency from Options
-		if Options.ChamsColor then
-			ESPSettings.ChamsTransparency = Options.ChamsColor.Transparency or 0.3
-		end
-		-- Force immediate update
-		if ApplyChamsToModel and CharacterModel and ESPSettings.ChamsESP then
-			pcall(function()
-				ApplyChamsToModel(true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
-			end)
-		end
+		UpdateESPPreview()
 	end
 })
 
-ChamsTab:AddToggle('ChamsVisibleOnly', {
-	Text = 'Visible Only',
-	Default = false,
-	Tooltip = 'Only show chams when player is visible (not behind walls)',
+ChamsTab:AddSlider('ChamsTransparency', {
+	Text = 'Fill Transparency',
+	Default = 0.3,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Compact = false,
 	Callback = function(Value)
-		ESPSettings.ChamsVisibleOnly = Value
+		ESPSettings.ChamsTransparency = Value
+		UpdateESPPreview()
 	end
 })
 
@@ -1436,29 +1278,27 @@ ChamsTab:AddToggle('ChamsOutline', {
 	Tooltip = 'Display outline around chams',
 	Callback = function(Value)
 		ESPSettings.ChamsOutline = Value
-		-- Force immediate update
-		if ApplyChamsToModel and CharacterModel and ESPSettings.ChamsESP then
-			pcall(function()
-				ApplyChamsToModel(true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
-			end)
-		end
+		UpdateESPPreview()
 	end
 }):AddColorPicker('ChamsOutlineColor', {
 	Default = Color3.fromRGB(0, 0, 0),
 	Title = 'Outline Color',
-	Transparency = 0.5,
 	Callback = function(Value)
 		ESPSettings.ChamsOutlineColor = Value
-		-- Get transparency from Options
-		if Options.ChamsOutlineColor then
-			ESPSettings.ChamsOutlineTransparency = Options.ChamsOutlineColor.Transparency or 0.5
-		end
-		-- Force immediate update
-		if ApplyChamsToModel and CharacterModel and ESPSettings.ChamsESP then
-			pcall(function()
-				ApplyChamsToModel(true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
-			end)
-		end
+		UpdateESPPreview()
+	end
+})
+
+ChamsTab:AddSlider('ChamsOutlineTransparency', {
+	Text = 'Outline Transparency',
+	Default = 0.5,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Compact = false,
+	Callback = function(Value)
+		ESPSettings.ChamsOutlineTransparency = Value
+		UpdateESPPreview()
 	end
 })
 
@@ -1852,85 +1692,15 @@ pcall(CreateCharacterModel)
 -- Chams ESP for ViewportFrame uses direct part coloring (Highlight doesn't work in ViewportFrame)
 -- Store original part colors for restore
 local OriginalPartColors = {}
-local PreviewChamsEnabled = false -- Renamed to avoid conflict with global ChamsEnabled
-local ChamsOutlineParts = {} -- Store outline parts for outline effect
+local ChamsEnabled = false
+local ChamsOutlineBoxes = {} -- Store SelectionBox for outline effect
 
--- Function to apply chams effect to CharacterModel parts (assign to forward declaration)
-ApplyChamsToModel = function(enabled, fillColor, transparency)
+-- Function to apply chams effect to CharacterModel parts
+local function ApplyChamsToModel(enabled, fillColor, transparency)
 	if not CharacterModel then return end
 	
-	-- Helper function to create edge lines for wireframe outline
-	local function CreateWireframeOutline(basePart)
-		local outlineFolder = Instance.new('Folder')
-		outlineFolder.Name = 'ChamsOutline'
-		outlineFolder.Parent = basePart
-		
-		local size = basePart.Size
-		local halfX, halfY, halfZ = size.X/2 + 0.02, size.Y/2 + 0.02, size.Z/2 + 0.02
-		local thickness = 0.03 -- Thin line thickness
-		
-		local outlineColor = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
-		local outlineTransparency = ESPSettings.ChamsOutlineTransparency or 0
-		
-		-- Define 12 edges of a box (each edge as position offset and size)
-		local edges = {
-			-- Bottom face edges (Y = -halfY)
-			{CFrame.new(0, -halfY, -halfZ), Vector3.new(size.X + 0.04, thickness, thickness)}, -- front bottom
-			{CFrame.new(0, -halfY, halfZ), Vector3.new(size.X + 0.04, thickness, thickness)},  -- back bottom
-			{CFrame.new(-halfX, -halfY, 0), Vector3.new(thickness, thickness, size.Z + 0.04)}, -- left bottom
-			{CFrame.new(halfX, -halfY, 0), Vector3.new(thickness, thickness, size.Z + 0.04)},  -- right bottom
-			-- Top face edges (Y = +halfY)
-			{CFrame.new(0, halfY, -halfZ), Vector3.new(size.X + 0.04, thickness, thickness)},  -- front top
-			{CFrame.new(0, halfY, halfZ), Vector3.new(size.X + 0.04, thickness, thickness)},   -- back top
-			{CFrame.new(-halfX, halfY, 0), Vector3.new(thickness, thickness, size.Z + 0.04)},  -- left top
-			{CFrame.new(halfX, halfY, 0), Vector3.new(thickness, thickness, size.Z + 0.04)},   -- right top
-			-- Vertical edges (connecting top and bottom)
-			{CFrame.new(-halfX, 0, -halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)}, -- front-left
-			{CFrame.new(halfX, 0, -halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)},  -- front-right
-			{CFrame.new(-halfX, 0, halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)},  -- back-left
-			{CFrame.new(halfX, 0, halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)},   -- back-right
-		}
-		
-		for i, edge in ipairs(edges) do
-			local edgePart = Instance.new('Part')
-			edgePart.Name = 'Edge' .. i
-			edgePart.Anchored = false
-			edgePart.CanCollide = false
-			edgePart.CanQuery = false
-			edgePart.CastShadow = false
-			edgePart.Massless = true
-			edgePart.Material = Enum.Material.Neon
-			edgePart.Color = outlineColor
-			edgePart.Transparency = outlineTransparency
-			edgePart.Size = edge[2]
-			edgePart.CFrame = basePart.CFrame * edge[1]
-			edgePart.Parent = outlineFolder
-			
-			-- Weld to base part
-			local weld = Instance.new('WeldConstraint')
-			weld.Part0 = basePart
-			weld.Part1 = edgePart
-			weld.Parent = edgePart
-		end
-		
-		return outlineFolder
-	end
-	
-	-- Helper function to update wireframe outline colors
-	local function UpdateWireframeOutline(outlineFolder)
-		local outlineColor = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
-		local outlineTransparency = ESPSettings.ChamsOutlineTransparency or 0
-		
-		for _, edgePart in ipairs(outlineFolder:GetChildren()) do
-			if edgePart:IsA('BasePart') then
-				edgePart.Color = outlineColor
-				edgePart.Transparency = outlineTransparency
-			end
-		end
-	end
-	
 	for _, part in ipairs(CharacterModel:GetDescendants()) do
-		if part:IsA('BasePart') and part.Name ~= 'ChamsOutline' and not part:FindFirstAncestor('ChamsOutline') then
+		if part:IsA('BasePart') then
 			if enabled then
 				-- Store original color if not stored
 				if not OriginalPartColors[part] then
@@ -1945,20 +1715,27 @@ ApplyChamsToModel = function(enabled, fillColor, transparency)
 				part.Material = Enum.Material.Neon -- Glowing effect
 				part.Transparency = transparency or 0.3
 				
-				-- Add wireframe outline
+				-- Add outline using SelectionBox if enabled
 				if ESPSettings.ChamsOutline then
-					if not ChamsOutlineParts[part] then
-						-- Create wireframe outline (12 edge lines)
-						ChamsOutlineParts[part] = CreateWireframeOutline(part)
+					if not ChamsOutlineBoxes[part] then
+						local selectionBox = Instance.new('SelectionBox')
+						selectionBox.Name = 'ChamsOutline'
+						selectionBox.Adornee = part
+						selectionBox.Color3 = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
+						selectionBox.Transparency = ESPSettings.ChamsOutlineTransparency or 0.5
+						selectionBox.LineThickness = 0.03
+						selectionBox.Parent = part
+						ChamsOutlineBoxes[part] = selectionBox
 					else
-						-- Update existing outline colors
-						UpdateWireframeOutline(ChamsOutlineParts[part])
+						-- Update existing outline
+						ChamsOutlineBoxes[part].Color3 = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
+						ChamsOutlineBoxes[part].Transparency = ESPSettings.ChamsOutlineTransparency or 0.5
+						ChamsOutlineBoxes[part].Visible = true
 					end
 				else
-					-- Remove outline if disabled
-					if ChamsOutlineParts[part] then
-						ChamsOutlineParts[part]:Destroy()
-						ChamsOutlineParts[part] = nil
+					-- Hide outline if disabled
+					if ChamsOutlineBoxes[part] then
+						ChamsOutlineBoxes[part].Visible = false
 					end
 				end
 			else
@@ -1968,16 +1745,15 @@ ApplyChamsToModel = function(enabled, fillColor, transparency)
 					part.Material = OriginalPartColors[part].Material
 					part.Transparency = OriginalPartColors[part].Transparency
 				end
-				-- Remove outline
-				if ChamsOutlineParts[part] then
-					ChamsOutlineParts[part]:Destroy()
-					ChamsOutlineParts[part] = nil
+				-- Hide outline
+				if ChamsOutlineBoxes[part] then
+					ChamsOutlineBoxes[part].Visible = false
 				end
 			end
 		end
 	end
 	
-	PreviewChamsEnabled = enabled
+	ChamsEnabled = enabled
 end
 
 print('[ESP Preview] Chams System Initialized (ViewportFrame compatible)')
@@ -1985,15 +1761,9 @@ print('[ESP Preview] Chams System Initialized (ViewportFrame compatible)')
 -- Update character when respawning
 game.Players.LocalPlayer.CharacterAdded:Connect(function()
 	task.wait(0.5) -- Wait for character to fully load
-	-- Reset original colors and outline parts before recreating model
+	-- Reset original colors and outline boxes before recreating model
 	OriginalPartColors = {}
-	-- Cleanup existing outline parts
-	for _, outlinePart in pairs(ChamsOutlineParts) do
-		if outlinePart and outlinePart.Parent then
-			outlinePart:Destroy()
-		end
-	end
-	ChamsOutlineParts = {}
+	ChamsOutlineBoxes = {}
 	pcall(CreateCharacterModel)
 	-- Re-apply chams if it was enabled
 	if ESPSettings.ChamsESP then
@@ -2403,29 +2173,12 @@ local function UpdateDynamicESPPreview()
 	-- Chams in ViewportFrame uses direct part coloring (Highlight doesn't work)
 	local chamsEnabled = ESPSettings.ChamsESP == true
 	
-	-- Always update chams when enabled to ensure real-time color/transparency changes
-	if chamsEnabled then
+	-- Only update when state changes to avoid performance issues
+	if chamsEnabled ~= ChamsEnabled then
+		ApplyChamsToModel(chamsEnabled, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
+	elseif chamsEnabled then
+		-- Update colors if chams is enabled (in case color changed)
 		ApplyChamsToModel(true, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
-	elseif chamsEnabled ~= PreviewChamsEnabled then
-		-- Only call when toggling off to restore original colors
-		ApplyChamsToModel(false, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
-	end
-	
-	-- Update wireframe outline colors (position is handled by WeldConstraint)
-	if chamsEnabled and ESPSettings.ChamsOutline then
-		local outlineColor = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
-		local outlineTransparency = ESPSettings.ChamsOutlineTransparency or 0
-		
-		for part, outlineFolder in pairs(ChamsOutlineParts) do
-			if part and part.Parent and outlineFolder and outlineFolder.Parent then
-				for _, edgePart in ipairs(outlineFolder:GetChildren()) do
-					if edgePart:IsA('BasePart') then
-						edgePart.Color = outlineColor
-						edgePart.Transparency = outlineTransparency
-					end
-				end
-			end
-		end
 	end
 end
 

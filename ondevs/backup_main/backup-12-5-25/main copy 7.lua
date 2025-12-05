@@ -1859,78 +1859,8 @@ local ChamsOutlineParts = {} -- Store outline parts for outline effect
 ApplyChamsToModel = function(enabled, fillColor, transparency)
 	if not CharacterModel then return end
 	
-	-- Helper function to create edge lines for wireframe outline
-	local function CreateWireframeOutline(basePart)
-		local outlineFolder = Instance.new('Folder')
-		outlineFolder.Name = 'ChamsOutline'
-		outlineFolder.Parent = basePart
-		
-		local size = basePart.Size
-		local halfX, halfY, halfZ = size.X/2 + 0.02, size.Y/2 + 0.02, size.Z/2 + 0.02
-		local thickness = 0.03 -- Thin line thickness
-		
-		local outlineColor = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
-		local outlineTransparency = ESPSettings.ChamsOutlineTransparency or 0
-		
-		-- Define 12 edges of a box (each edge as position offset and size)
-		local edges = {
-			-- Bottom face edges (Y = -halfY)
-			{CFrame.new(0, -halfY, -halfZ), Vector3.new(size.X + 0.04, thickness, thickness)}, -- front bottom
-			{CFrame.new(0, -halfY, halfZ), Vector3.new(size.X + 0.04, thickness, thickness)},  -- back bottom
-			{CFrame.new(-halfX, -halfY, 0), Vector3.new(thickness, thickness, size.Z + 0.04)}, -- left bottom
-			{CFrame.new(halfX, -halfY, 0), Vector3.new(thickness, thickness, size.Z + 0.04)},  -- right bottom
-			-- Top face edges (Y = +halfY)
-			{CFrame.new(0, halfY, -halfZ), Vector3.new(size.X + 0.04, thickness, thickness)},  -- front top
-			{CFrame.new(0, halfY, halfZ), Vector3.new(size.X + 0.04, thickness, thickness)},   -- back top
-			{CFrame.new(-halfX, halfY, 0), Vector3.new(thickness, thickness, size.Z + 0.04)},  -- left top
-			{CFrame.new(halfX, halfY, 0), Vector3.new(thickness, thickness, size.Z + 0.04)},   -- right top
-			-- Vertical edges (connecting top and bottom)
-			{CFrame.new(-halfX, 0, -halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)}, -- front-left
-			{CFrame.new(halfX, 0, -halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)},  -- front-right
-			{CFrame.new(-halfX, 0, halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)},  -- back-left
-			{CFrame.new(halfX, 0, halfZ), Vector3.new(thickness, size.Y + 0.04, thickness)},   -- back-right
-		}
-		
-		for i, edge in ipairs(edges) do
-			local edgePart = Instance.new('Part')
-			edgePart.Name = 'Edge' .. i
-			edgePart.Anchored = false
-			edgePart.CanCollide = false
-			edgePart.CanQuery = false
-			edgePart.CastShadow = false
-			edgePart.Massless = true
-			edgePart.Material = Enum.Material.Neon
-			edgePart.Color = outlineColor
-			edgePart.Transparency = outlineTransparency
-			edgePart.Size = edge[2]
-			edgePart.CFrame = basePart.CFrame * edge[1]
-			edgePart.Parent = outlineFolder
-			
-			-- Weld to base part
-			local weld = Instance.new('WeldConstraint')
-			weld.Part0 = basePart
-			weld.Part1 = edgePart
-			weld.Parent = edgePart
-		end
-		
-		return outlineFolder
-	end
-	
-	-- Helper function to update wireframe outline colors
-	local function UpdateWireframeOutline(outlineFolder)
-		local outlineColor = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
-		local outlineTransparency = ESPSettings.ChamsOutlineTransparency or 0
-		
-		for _, edgePart in ipairs(outlineFolder:GetChildren()) do
-			if edgePart:IsA('BasePart') then
-				edgePart.Color = outlineColor
-				edgePart.Transparency = outlineTransparency
-			end
-		end
-	end
-	
 	for _, part in ipairs(CharacterModel:GetDescendants()) do
-		if part:IsA('BasePart') and part.Name ~= 'ChamsOutline' and not part:FindFirstAncestor('ChamsOutline') then
+		if part:IsA('BasePart') then
 			if enabled then
 				-- Store original color if not stored
 				if not OriginalPartColors[part] then
@@ -1945,14 +1875,31 @@ ApplyChamsToModel = function(enabled, fillColor, transparency)
 				part.Material = Enum.Material.Neon -- Glowing effect
 				part.Transparency = transparency or 0.3
 				
-				-- Add wireframe outline
+				-- Add outline using slightly larger clone part (works in ViewportFrame)
 				if ESPSettings.ChamsOutline then
 					if not ChamsOutlineParts[part] then
-						-- Create wireframe outline (12 edge lines)
-						ChamsOutlineParts[part] = CreateWireframeOutline(part)
+						-- Create outline part (slightly larger clone behind the main part)
+						local outlinePart = Instance.new('Part')
+						outlinePart.Name = 'ChamsOutline'
+						outlinePart.Anchored = true
+						outlinePart.CanCollide = false
+						outlinePart.CastShadow = false
+						outlinePart.Material = Enum.Material.Neon
+						outlinePart.Color = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
+						outlinePart.Transparency = ESPSettings.ChamsOutlineTransparency or 0.5
+						-- Make it slightly larger for outline effect
+						outlinePart.Size = part.Size + Vector3.new(0.08, 0.08, 0.08)
+						outlinePart.CFrame = part.CFrame
+						outlinePart.Parent = WorldModel
+						ChamsOutlineParts[part] = outlinePart
 					else
-						-- Update existing outline colors
-						UpdateWireframeOutline(ChamsOutlineParts[part])
+						-- Update existing outline
+						local outlinePart = ChamsOutlineParts[part]
+						outlinePart.Color = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
+						outlinePart.Transparency = ESPSettings.ChamsOutlineTransparency or 0.5
+						outlinePart.Size = part.Size + Vector3.new(0.08, 0.08, 0.08)
+						outlinePart.CFrame = part.CFrame
+						outlinePart.Visible = true
 					end
 				else
 					-- Remove outline if disabled
@@ -1968,7 +1915,7 @@ ApplyChamsToModel = function(enabled, fillColor, transparency)
 					part.Material = OriginalPartColors[part].Material
 					part.Transparency = OriginalPartColors[part].Transparency
 				end
-				-- Remove outline
+				-- Remove outline part
 				if ChamsOutlineParts[part] then
 					ChamsOutlineParts[part]:Destroy()
 					ChamsOutlineParts[part] = nil
@@ -2411,19 +2358,14 @@ local function UpdateDynamicESPPreview()
 		ApplyChamsToModel(false, ESPSettings.ChamsColor, ESPSettings.ChamsTransparency)
 	end
 	
-	-- Update wireframe outline colors (position is handled by WeldConstraint)
+	-- Update outline parts position, color and transparency to follow avatar rotation
 	if chamsEnabled and ESPSettings.ChamsOutline then
-		local outlineColor = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
-		local outlineTransparency = ESPSettings.ChamsOutlineTransparency or 0
-		
-		for part, outlineFolder in pairs(ChamsOutlineParts) do
-			if part and part.Parent and outlineFolder and outlineFolder.Parent then
-				for _, edgePart in ipairs(outlineFolder:GetChildren()) do
-					if edgePart:IsA('BasePart') then
-						edgePart.Color = outlineColor
-						edgePart.Transparency = outlineTransparency
-					end
-				end
+		for part, outlinePart in pairs(ChamsOutlineParts) do
+			if part and part.Parent and outlinePart and outlinePart.Parent then
+				outlinePart.CFrame = part.CFrame
+				outlinePart.Size = part.Size + Vector3.new(0.08, 0.08, 0.08)
+				outlinePart.Color = ESPSettings.ChamsOutlineColor or Color3.fromRGB(0, 0, 0)
+				outlinePart.Transparency = ESPSettings.ChamsOutlineTransparency or 0.5
 			end
 		end
 	end
