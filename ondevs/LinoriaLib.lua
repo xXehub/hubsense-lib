@@ -461,10 +461,14 @@ do
 
         if self.Type == 'Toggle' and ToggleLabel and self.Container then
             local function UpdateToggleLabelWidth()
-                local width = self.Container.AbsoluteSize.X
-                if width and width > 0 then
-                    local padding = 10
-                    ToggleLabel.Size = UDim2.new(0, math.max(0, width - padding), 1, 0)
+                local containerWidth = self.Container.AbsoluteSize.X
+                if containerWidth and containerWidth > 0 then
+                    -- ToggleLabel diposisikan 6px ke kanan dari checkbox (13x13)
+                    -- Jadi offset dari kiri container = 13 + 6 = 19px
+                    -- Untuk menyamakan dengan Label yang menggunakan (1, -4), kita perlu:
+                    -- ToggleLabel.Width = containerWidth - 19 - 4 = containerWidth - 23
+                    local toggleOffset = 23
+                    ToggleLabel.Size = UDim2.new(0, math.max(0, containerWidth - toggleOffset), 1, 0)
                 end
             end
 
