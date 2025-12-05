@@ -1068,23 +1068,6 @@ do
         local ToggleLabel = self.TextLabel;
         local Container = self.Container;
 
-        if ParentObj.Type == 'Toggle' and ToggleLabel and Container then
-            local function UpdateToggleLabelWidth()
-                local containerWidth = Container.AbsoluteSize.X
-                if containerWidth and containerWidth > 0 then
-                    -- ToggleLabel diposisikan 6px ke kanan dari checkbox (13x13)
-                    -- Jadi offset dari kiri container = 13 + 6 = 19px
-                    -- Untuk menyamakan dengan Label yang menggunakan (1, -4), kita perlu:
-                    -- ToggleLabel.Width = containerWidth - 19 - 4 = containerWidth - 23
-                    local toggleOffset = 23
-                    ToggleLabel.Size = UDim2.new(0, math.max(0, containerWidth - toggleOffset), 1, 0)
-                end
-            end
-
-            task.defer(UpdateToggleLabelWidth)
-            Library:GiveSignal(Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth))
-        end
-
         assert(Info.Default, 'AddKeyPicker: Missing default value.');
 
         local KeyPicker = {
