@@ -457,25 +457,25 @@ do
 
     function Funcs:AddColorPicker(Idx, Info)
         local ToggleLabel = self.TextLabel;
-        -- local Container = self.Container;
+        local Container = self.Container;
 
         -- Update ToggleLabel width untuk positioning yang sama dengan Label
-        if self.Type == 'Toggle' and ToggleLabel and self.Container and not self._WidthUpdaterSet then
-            self._WidthUpdaterSet = true
+        -- Label menggunakan Size = UDim2.new(1, -4, 0, 15) relative to Container
+        -- Toggle: checkbox = 13px, gap = 6px, total offset dari kiri = 19px
+        -- Untuk edge kanan sama dengan Label: width = Container.Width - 4 - 19 = Container.Width - 23
+        if self.Type == 'Toggle' and ToggleLabel and Container then
             local function UpdateToggleLabelWidth()
-                local containerWidth = self.Container.AbsoluteSize.X
-                if containerWidth and containerWidth > 0 then
-                    -- ToggleLabel diposisikan 6px ke kanan dari checkbox (13x13)
-                    -- Jadi offset dari kiri container = 13 + 6 = 19px
-                    -- Untuk menyamakan dengan Label yang menggunakan (1, -4), kita perlu:
-                    -- ToggleLabel.Width = containerWidth - 19 - 4 = containerWidth - 23
-                    local toggleOffset = 23
-                    ToggleLabel.Size = UDim2.new(0, math.max(0, containerWidth - toggleOffset), 1, 0)
+                local containerWidth = Container.AbsoluteSize.X
+                if containerWidth > 0 then
+                    ToggleLabel.Size = UDim2.new(0, containerWidth - 23, 1, 0)
                 end
             end
-
+            
+            -- Jalankan setelah render dan listen perubahan
+            UpdateToggleLabelWidth()
             task.defer(UpdateToggleLabelWidth)
-            Library:GiveSignal(self.Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth))
+            task.delay(0.1, UpdateToggleLabelWidth)
+            Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth)
         end
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
@@ -1071,22 +1071,18 @@ do
         local Container = self.Container;
 
         -- Update ToggleLabel width untuk positioning yang sama dengan Label
-        if ParentObj.Type == 'Toggle' and ToggleLabel and Container and not ParentObj._WidthUpdaterSet then
-            ParentObj._WidthUpdaterSet = true
+        if ParentObj.Type == 'Toggle' and ToggleLabel and Container then
             local function UpdateToggleLabelWidth()
                 local containerWidth = Container.AbsoluteSize.X
-                if containerWidth and containerWidth > 0 then
-                    -- ToggleLabel diposisikan 6px ke kanan dari checkbox (13x13)
-                    -- Jadi offset dari kiri container = 13 + 6 = 19px
-                    -- Untuk menyamakan dengan Label yang menggunakan (1, -4), kita perlu:
-                    -- ToggleLabel.Width = containerWidth - 19 - 4 = containerWidth - 23
-                    local toggleOffset = 23
-                    ToggleLabel.Size = UDim2.new(0, math.max(0, containerWidth - toggleOffset), 1, 0)
+                if containerWidth > 0 then
+                    ToggleLabel.Size = UDim2.new(0, containerWidth - 23, 1, 0)
                 end
             end
-
+            
+            UpdateToggleLabelWidth()
             task.defer(UpdateToggleLabelWidth)
-            Library:GiveSignal(Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth))
+            task.delay(0.1, UpdateToggleLabelWidth)
+            Container:GetPropertyChangedSignal('AbsoluteSize'):Connect(UpdateToggleLabelWidth)
         end
 
         assert(Info.Default, 'AddKeyPicker: Missing default value.');
