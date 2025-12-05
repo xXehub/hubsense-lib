@@ -463,7 +463,7 @@ do
             local function UpdateToggleLabelWidth()
                 local width = self.Container.AbsoluteSize.X
                 if width and width > 0 then
-                    local padding = 10
+                    local padding = 6
                     ToggleLabel.Size = UDim2.new(0, math.max(0, width - padding), 1, 0)
                 end
             end
