@@ -75,8 +75,6 @@ local IsInGame = false -- Track if player is currently in a game
 local AutoAnswerEnabled = false
 local AutoAnswerConnection = nil
 local AutoAnswerDelay = 0.3 -- Delay before clicking answer (seconds)
-local AutoAnswerTypingDelay = 0.04 -- Delay between each character typed (seconds)
-local AutoAnswerWrongDelay = 1.5 -- Time to wait before considering answer wrong (seconds)
 local AutoAnswerMaxLength = 10 -- Max word length to prefer
 local AutoAnswerMinLength = 3 -- Min word length
 local AutoAnswerLastWord = "" -- Track last word to avoid duplicate triggers
@@ -1016,8 +1014,20 @@ end
 local function ClearInput()
 	local VIM = game:GetService("VirtualInputManager")
 	
-	-- Method 1: Just use many backspaces (safer, no Ctrl+A which causes 'A' bug)
-	for i = 1, 50 do
+	-- Method 1: Select all (Ctrl+A) and delete
+	pcall(function()
+		VIM:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+		VIM:SendKeyEvent(true, Enum.KeyCode.A, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.A, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+		task.wait(0.02)
+		VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+	end)
+	task.wait(0.05)
+	
+	-- Method 2: Many backspaces to be sure
+	for i = 1, 30 do
 		pcall(function()
 			VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
 			VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
@@ -1042,10 +1052,22 @@ local function TypeWord(word)
 	local success = false
 	local maxTypeAttempts = 3
 	
-	-- Helper: Clear all input (just backspaces, no Ctrl+A to avoid 'A' bug)
+	-- Helper: Clear all input aggressively
 	local function DoClearInput()
-		-- Just use many backspaces - safer than Ctrl+A
-		for i = 1, 50 do
+		-- Ctrl+A then Backspace
+		pcall(function()
+			VIM:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+			VIM:SendKeyEvent(true, Enum.KeyCode.A, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.A, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+			task.wait(0.03)
+			VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+		end)
+		task.wait(0.05)
+		
+		-- Additional backspaces
+		for i = 1, 30 do
 			pcall(function()
 				VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
 				VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
@@ -1065,9 +1087,9 @@ local function TypeWord(word)
 		local keyCode = Enum.KeyCode[char:upper()]
 		if keyCode then
 			VIM:SendKeyEvent(true, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+			task.wait(0.04)
 			VIM:SendKeyEvent(false, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+			task.wait(0.04)
 			return true
 		end
 		return false
@@ -1398,9 +1420,9 @@ local function ProcessAutoAnswer()
 		-- SATU-SATUNYA cara detect SUCCESS: Turn berakhir (myTurn = false)
 		-- Karena myTurn masih true di sini, berarti jawaban BELUM diterima
 		
-		-- Tunggu sesuai delay setting sebelum retry
-		-- Jika setelah delay masih giliran kita = WRONG
-		if timeSinceAnswer > AutoAnswerWrongDelay then
+		-- Tunggu minimal 1.5 detik sebelum retry
+		-- Jika setelah 1.5 detik masih giliran kita = WRONG
+		if timeSinceAnswer > 1.5 then
 			print("[Auto Answer] WRONG ANSWER - still my turn after " .. string.format("%.1f", timeSinceAnswer) .. "s")
 			print("[Auto Answer] Current word: '" .. tostring(currentWord) .. "'")
 			
@@ -2924,37 +2946,9 @@ GameFeaturesBox:AddSlider('AutoAnswerDelay', {
 	Rounding = 1,
 	Suffix = 's',
 	Compact = false,
-	Tooltip = 'Delay before starting to type answer',
+	Tooltip = 'Delay before clicking letter choice',
 	Callback = function(Value)
 		AutoAnswerDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerTypingDelay', {
-	Text = 'Typing Speed',
-	Default = 0.04,
-	Min = 0.01,
-	Max = 0.2,
-	Rounding = 2,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Delay between each character typed (lower = faster)',
-	Callback = function(Value)
-		AutoAnswerTypingDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerWrongDelay', {
-	Text = 'Wrong Answer Timeout',
-	Default = 1.5,
-	Min = 0.5,
-	Max = 5,
-	Rounding = 1,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Time to wait before considering answer wrong and retrying',
-	Callback = function(Value)
-		AutoAnswerWrongDelay = Value
 	end
 })
 

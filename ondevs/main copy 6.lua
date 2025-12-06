@@ -75,8 +75,6 @@ local IsInGame = false -- Track if player is currently in a game
 local AutoAnswerEnabled = false
 local AutoAnswerConnection = nil
 local AutoAnswerDelay = 0.3 -- Delay before clicking answer (seconds)
-local AutoAnswerTypingDelay = 0.04 -- Delay between each character typed (seconds)
-local AutoAnswerWrongDelay = 1.5 -- Time to wait before considering answer wrong (seconds)
 local AutoAnswerMaxLength = 10 -- Max word length to prefer
 local AutoAnswerMinLength = 3 -- Min word length
 local AutoAnswerLastWord = "" -- Track last word to avoid duplicate triggers
@@ -816,183 +814,11 @@ end
 
 -- ==================== AUTO ANSWER FUNCTIONS ====================
 
--- Track state for auto answer
-local AutoAnswerLastWord = ""
-local AutoAnswerTypedThisTurn = false
+-- Track last choices to detect turn change
+local AutoAnswerLastChoices = ""
 
--- Track failed words to avoid retrying them
-local FailedWords = {}
-local LastAnswerTime = 0
-local WaitingForResult = false
-local CurrentAnswerWord = nil -- The full word we submitted (e.g., "gracile")
-local CurrentPrefix = nil -- Track the starting prefix/letter for retries
-local LastSeenWord = nil -- The word displayed when we started our turn (e.g., "RETAXING")
-local OriginalPrefix = nil -- THE ORIGINAL PREFIX - NEVER changes during a turn, used for retry
-
--- Get the last letter we need to start with (read full word from CurrentWord)
-local function GetRequiredLetter()
-	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
-	if not playerGui then return nil, nil end
-	
-	local inGame = playerGui:FindFirstChild("InGame")
-	if not inGame then return nil, nil end
-	
-	local frame = inGame:FindFirstChild("Frame")
-	if not frame or not frame.Visible then return nil, nil end
-	
-	-- Method 1: Look for CurrentWord container (shows the current word to continue from)
-	local currentWordContainer = frame:FindFirstChild("CurrentWord")
-	if currentWordContainer then
-		-- APPROACH 1: Direct child frames with numbers ("1", "2", "3", etc)
-		local letterLabels = {}
-		local maxIndex = 0
-		
-		-- First, scan DIRECT children that are numbered frames
-		for _, child in ipairs(currentWordContainer:GetChildren()) do
-			if child:IsA("Frame") then
-				local num = tonumber(child.Name)
-				if num then
-					-- Look for Letter label inside this frame
-					local letterLabel = child:FindFirstChild("Letter")
-					if letterLabel and letterLabel:IsA("TextLabel") then
-						local text = letterLabel.Text
-						if text and text ~= "" and text ~= "..." then
-							letterLabels[num] = text:upper()
-							if num > maxIndex then
-								maxIndex = num
-							end
-						end
-					end
-				end
-			end
-		end
-		
-		-- Build the full word from all letters
-		if maxIndex > 0 then
-			local fullWord = ""
-			local missingCount = 0
-			for i = 1, maxIndex do
-				if letterLabels[i] then
-					fullWord = fullWord .. letterLabels[i]
-				else
-					missingCount = missingCount + 1
-				end
-			end
-			
-			-- Debug: show what we found
-			if missingCount > 0 then
-				print("[GetRequiredLetter] WARNING: Missing " .. missingCount .. " letters (maxIndex=" .. maxIndex .. ")")
-			end
-			
-			if fullWord ~= "" then
-				local lastLetter = fullWord:sub(-1):upper()
-				return lastLetter, fullWord
-			end
-		end
-		
-		-- APPROACH 2: Fallback - scan ALL descendants
-		letterLabels = {}
-		maxIndex = 0
-		
-		for _, desc in ipairs(currentWordContainer:GetDescendants()) do
-			if desc:IsA("TextLabel") and desc.Name == "Letter" then
-				local parentFrame = desc.Parent
-				if parentFrame and parentFrame:IsA("Frame") then
-					local num = tonumber(parentFrame.Name)
-					if num then
-						local text = desc.Text
-						if text and text ~= "" and text ~= "..." then
-							letterLabels[num] = text:upper()
-							if num > maxIndex then
-								maxIndex = num
-							end
-						end
-					end
-				end
-			end
-		end
-		
-		if maxIndex > 0 then
-			local fullWord = ""
-			for i = 1, maxIndex do
-				fullWord = fullWord .. (letterLabels[i] or "")
-			end
-			
-			if fullWord ~= "" then
-				local lastLetter = fullWord:sub(-1):upper()
-				return lastLetter, fullWord
-			end
-		end
-		
-		-- Fallback: Check Case container (sometimes just shows last letter)
-		local caseFrame = currentWordContainer:FindFirstChild("Case")
-		if caseFrame then
-			local letterLabel = caseFrame:FindFirstChild("Letter")
-			if letterLabel and letterLabel:IsA("TextLabel") then
-				local text = letterLabel.Text
-				if text and text ~= "..." and text ~= "" then
-					local letter = text:sub(-1):upper()
-					return letter, text
-				end
-			end
-		end
-	end
-	
-	-- Method 2: Look for any visible TextLabel with word-like content
-	for _, desc in ipairs(frame:GetDescendants()) do
-		if desc:IsA("TextLabel") and desc.Visible then
-			local text = desc.Text:gsub("%s+", "")
-			local name = desc.Name:lower()
-			
-			-- Check if it's a word label (not UI elements)
-			if name:find("word") or name:find("current") then
-				if #text >= 1 and text:match("^[A-Za-z]+$") then
-					local lastLetter = text:sub(-1):upper()
-					return lastLetter, text
-				end
-			end
-		end
-	end
-	
-	return nil, nil
-end
-
-
--- Check if it's player's turn by detecting Type label
-local function IsMyTurn()
-	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
-	if not playerGui then return false, "no PlayerGui" end
-	
-	local inGame = playerGui:FindFirstChild("InGame")
-	if not inGame then return false, "no InGame" end
-	
-	local frame = inGame:FindFirstChild("Frame")
-	if not frame or not frame.Visible then return false, "Frame not visible" end
-	
-	-- Look for Type label with player's name
-	local typeLabel = frame:FindFirstChild("Type")
-	if not typeLabel or not typeLabel:IsA("TextLabel") then 
-		return false, "no Type label" 
-	end
-	
-	local text = typeLabel.Text:lower()
-	local playerName = game.Players.LocalPlayer.Name:lower()
-	local displayName = game.Players.LocalPlayer.DisplayName:lower()
-	
-	-- Check if text contains our username or display name
-	if text:find(playerName, 1, true) then
-		return true, "matched name"
-	end
-	
-	if displayName ~= playerName and text:find(displayName, 1, true) then
-		return true, "matched displayname"
-	end
-	
-	return false, "name not in Type: '" .. typeLabel.Text .. "'"
-end
-
--- Find the TextBox where player types their answer
-local function GetInputTextBox()
+-- Get current word from InGame GUI (last letter needed)
+local function GetCurrentGameWord()
 	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
 	if not playerGui then return nil end
 	
@@ -1002,126 +828,132 @@ local function GetInputTextBox()
 	local frame = inGame:FindFirstChild("Frame")
 	if not frame or not frame.Visible then return nil end
 	
-	-- Search for TextBox in Frame
-	for _, desc in ipairs(frame:GetDescendants()) do
-		if desc:IsA("TextBox") then
-			return desc
+	-- Look for CurrentWord container
+	local currentWordContainer = frame:FindFirstChild("CurrentWord")
+	if currentWordContainer then
+		local word = ""
+		local letterLabels = {}
+		
+		-- Check Case container first (from debug: CurrentWord > Case > Letter)
+		local caseFrame = currentWordContainer:FindFirstChild("Case")
+		if caseFrame then
+			local letterLabel = caseFrame:FindFirstChild("Letter")
+			if letterLabel and letterLabel:IsA("TextLabel") then
+				local text = letterLabel.Text
+				-- Skip "..." placeholder
+				if text and text ~= "..." and text ~= "" then
+					return text:upper()
+				end
+			end
+		end
+		
+		-- Fallback: check numbered frames
+		for _, child in ipairs(currentWordContainer:GetChildren()) do
+			if child:IsA("Frame") then
+				local num = tonumber(child.Name)
+				if num then
+					local letterLabel = child:FindFirstChild("Letter")
+					if letterLabel and letterLabel:IsA("TextLabel") then
+						local text = letterLabel.Text
+						if text and text ~= "..." and text ~= "" then
+							letterLabels[num] = text
+						end
+					end
+				end
+			end
+		end
+		
+		-- Build word from sorted letters
+		local maxIndex = 0
+		for k in pairs(letterLabels) do
+			if k > maxIndex then maxIndex = k end
+		end
+		
+		for i = 1, maxIndex do
+			word = word .. (letterLabels[i] or "")
+		end
+		
+		if word ~= "" then
+			return word:upper()
 		end
 	end
 	
 	return nil
 end
 
--- Clear any existing input in the text box
-local function ClearInput()
-	local VIM = game:GetService("VirtualInputManager")
+-- Check if it's player's turn by detecting Type label
+local function IsMyTurn()
+	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then return false end
 	
-	-- Method 1: Just use many backspaces (safer, no Ctrl+A which causes 'A' bug)
-	for i = 1, 50 do
-		pcall(function()
-			VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
-			VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
-		end)
-	end
-	task.wait(0.05)
+	local inGame = playerGui:FindFirstChild("InGame")
+	if not inGame then return false end
 	
-	print("[Auto Answer] Cleared input")
-end
-
--- Type a word into the game using keyboard simulation
--- Returns: true if successfully typed and submitted, false otherwise
-local function TypeWord(word)
-	if not word or word == "" then 
-		print("[Auto Answer] No word to type!")
-		return false 
-	end
+	local frame = inGame:FindFirstChild("Frame")
+	if not frame or not frame.Visible then return false end
 	
-	print("[Auto Answer] Attempting to type word: '" .. word .. "'")
-	
-	local VIM = game:GetService("VirtualInputManager")
-	local success = false
-	local maxTypeAttempts = 3
-	
-	-- Helper: Clear all input (just backspaces, no Ctrl+A to avoid 'A' bug)
-	local function DoClearInput()
-		-- Just use many backspaces - safer than Ctrl+A
-		for i = 1, 50 do
-			pcall(function()
-				VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
-				VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
-			end)
-		end
-		task.wait(0.05)
-	end
-	
-	-- Helper: Type a single character (only A-Z supported)
-	local function TypeChar(char)
-		-- Only allow A-Z characters
-		if not char:match("^[a-zA-Z]$") then
-			print("[Auto Answer] WARNING: Cannot type character '" .. char .. "' - not A-Z")
-			return false
-		end
+	-- Look for Type label with "pick a letter" text
+	local typeLabel = frame:FindFirstChild("Type")
+	if typeLabel and typeLabel:IsA("TextLabel") then
+		local text = typeLabel.Text:lower()
+		local playerName = game.Players.LocalPlayer.Name:lower()
 		
-		local keyCode = Enum.KeyCode[char:upper()]
-		if keyCode then
-			VIM:SendKeyEvent(true, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
-			VIM:SendKeyEvent(false, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+		-- Check if it contains our username AND "pick a letter"
+		if text:find(playerName) and text:find("pick a letter") then
 			return true
 		end
-		return false
-	end
-	
-	-- Helper: Press Enter to submit (ONLY ONCE!)
-	local function PressEnter()
-		pcall(function()
-			VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-			task.wait(0.05)
-			VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-		end)
-		print("[Auto Answer] Enter pressed (submitted)")
-	end
-	
-	-- Type with retry loop
-	for attempt = 1, maxTypeAttempts do
-		local typeSuccess = false
 		
-		pcall(function()
-			-- Clear any existing input first
-			DoClearInput()
-			
-			-- Type each character
-			for i = 1, #word do
-				local char = word:sub(i, i)
-				TypeChar(char)
+		-- Alternative: just check if our name is mentioned (simpler)
+		if text:find(playerName) then
+			-- Also verify Choices frame exists and is visible
+			local choices = frame:FindFirstChild("Choices")
+			if choices and choices.Visible then
+				return true
 			end
-			
-			typeSuccess = true
-		end)
-		
-		if typeSuccess then
-			success = true
-			print("[Auto Answer] Typed successfully (attempt " .. attempt .. ")")
-			break
-		else
-			print("[Auto Answer] Type failed (attempt " .. attempt .. "), retrying...")
-			task.wait(0.1)
 		end
 	end
 	
-	-- Submit with Enter
-	if success then
-		task.wait(0.1)
-		PressEnter()
-	end
-	
-	return success
+	return false
 end
 
+-- Get available letter choices from Choices frame
+local function GetLetterChoices()
+	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then return {} end
+	
+	local inGame = playerGui:FindFirstChild("InGame")
+	if not inGame then return {} end
+	
+	local frame = inGame:FindFirstChild("Frame")
+	if not frame or not frame.Visible then return {} end
+	
+	local choices = {}
+	local choicesFrame = frame:FindFirstChild("Choices")
+	
+	if choicesFrame and choicesFrame.Visible then
+		for _, child in ipairs(choicesFrame:GetChildren()) do
+			if child:IsA("TextButton") and child.Visible and child.Text ~= "" then
+				table.insert(choices, {
+					Button = child,
+					Letter = child.Text:upper(),
+					Name = child.Name
+				})
+			end
+		end
+	end
+	
+	-- Sort by name (1, 2, 3, 4)
+	table.sort(choices, function(a, b)
+		local numA = tonumber(a.Name) or 0
+		local numB = tonumber(b.Name) or 0
+		return numA < numB
+	end)
+	
+	return choices
+end
 
--- Find best word starting with a PREFIX (can be multi-character like "IC")
-local function FindBestWordWithPrefix(prefix, excludeWords)
+-- Find best word starting with a letter from our word database
+local function FindBestWord(startLetter)
 	if not loaded then 
 		print("[Auto Answer] Words not loaded yet!")
 		return nil 
@@ -1131,193 +963,133 @@ local function FindBestWordWithPrefix(prefix, excludeWords)
 		return nil 
 	end
 	
-	prefix = prefix:lower()
-	local firstLetter = prefix:sub(1, 1)
-	local wordList = WordDictionary[firstLetter]
+	startLetter = startLetter:lower()
+	local wordList = WordDictionary[startLetter]
 	
 	if not wordList then 
-		print("[Auto Answer] No wordList for letter '" .. firstLetter .. "'")
+		print("[Auto Answer] No wordList for letter '" .. startLetter .. "'")
 		return nil 
 	end
 	
 	if #wordList == 0 then 
-		print("[Auto Answer] wordList empty for letter '" .. firstLetter .. "'")
+		print("[Auto Answer] wordList empty for letter '" .. startLetter .. "'")
 		return nil 
 	end
 	
-	excludeWords = excludeWords or {}
-	
-	-- Filter by prefix match, length preference, and exclude failed words
-	-- IMPORTANT: Only allow words with A-Z letters (no hyphens, apostrophes, etc)
+	-- Filter by length preference
 	local validWords = {}
 	for _, word in ipairs(wordList) do
-		local wordLower = word:lower()
-		-- Check if word ONLY contains letters (no special characters like - or ')
-		if wordLower:match("^[a-z]+$") then
-			-- Check if word starts with full prefix
-			if wordLower:sub(1, #prefix) == prefix then
-				local len = #word
-				-- Check length and not in exclude list
-				if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
-					if not excludeWords[wordLower] and not FailedWords[wordLower] then
-						table.insert(validWords, word)
-					end
-				end
-			end
+		local len = #word
+		if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
+			table.insert(validWords, word)
 		end
 	end
 	
 	if #validWords == 0 then
-		-- Fallback: try any word starting with prefix (ignore length, but still only letters)
-		for _, word in ipairs(wordList) do
-			local wordLower = word:lower()
-			if wordLower:match("^[a-z]+$") then
-				if wordLower:sub(1, #prefix) == prefix then
-					if not excludeWords[wordLower] and not FailedWords[wordLower] then
-						table.insert(validWords, word)
-					end
-				end
-			end
-		end
-	end
-	
-	if #validWords == 0 then
-		print("[Auto Answer] No valid words found for prefix '" .. prefix .. "'")
-		return nil
+		-- Fallback: use any word if no words in range
+		return wordList[math.random(1, math.min(100, #wordList))]
 	end
 	
 	-- Random pick from valid words
 	return validWords[math.random(1, #validWords)]
 end
 
--- Wrapper for single letter (backward compatible)
-local function FindBestWord(startLetter, excludeWords)
-	return FindBestWordWithPrefix(startLetter, excludeWords)
-end
-
--- Count words available for a prefix (can be multi-character)
-local function CountWordsForPrefix(prefix)
+-- Count words available for each letter choice
+local function CountWordsForLetter(letter)
 	if not loaded then return 0 end
 	if not WordDictionary then return 0 end
 	
-	-- Convert to lowercase for dictionary lookup
-	prefix = prefix:lower()
-	local firstLetter = prefix:sub(1, 1)
-	local wordList = WordDictionary[firstLetter]
+	-- IMPORTANT: Convert to lowercase for dictionary lookup
+	letter = letter:lower()
+	local wordList = WordDictionary[letter]
 	
 	if not wordList then return 0 end
 	
-	-- Count words that start with prefix and in valid length range
-	-- IMPORTANT: Only count words with A-Z letters only (no special characters)
+	-- Count words in valid length range
 	local count = 0
 	for _, word in ipairs(wordList) do
-		local wordLower = word:lower()
-		-- Only count words with letters only
-		if wordLower:match("^[a-z]+$") then
-			-- Must start with the full prefix
-			if wordLower:sub(1, #prefix) == prefix then
-				local len = #word
-				if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
-					if not FailedWords[wordLower] then
-						count = count + 1
-					end
-				end
-			end
+		local len = #word
+		if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
+			count = count + 1
 		end
 	end
 	return count
 end
 
--- Alias for backward compatibility
-local function CountWordsForLetter(letter)
-	return CountWordsForPrefix(letter)
+-- Click a letter choice button
+local function ClickLetterChoice(choice)
+	if not choice or not choice.Button then return false end
+	
+	local button = choice.Button
+	local clicked = false
+	
+	-- Method 1: firesignal MouseButton1Click
+	pcall(function()
+		if firesignal and not clicked then
+			firesignal(button, "MouseButton1Click")
+			clicked = true
+		end
+	end)
+	if clicked then return true end
+	
+	-- Method 2: firesignal Activated
+	pcall(function()
+		if firesignal and not clicked then
+			firesignal(button, "Activated")
+			clicked = true
+		end
+	end)
+	if clicked then return true end
+	
+	-- Method 3: fireclick
+	pcall(function()
+		if fireclick and not clicked then
+			fireclick(button)
+			clicked = true
+		end
+	end)
+	if clicked then return true end
+	
+	-- Method 4: getconnections
+	pcall(function()
+		if getconnections and not clicked then
+			for _, conn in ipairs(getconnections(button.MouseButton1Click)) do
+				if conn.Function then
+					conn.Function()
+					clicked = true
+					break
+				end
+			end
+		end
+	end)
+	if clicked then return true end
+	
+	-- Method 5: Activated connections
+	pcall(function()
+		if getconnections and not clicked then
+			for _, conn in ipairs(getconnections(button.Activated)) do
+				if conn.Function then
+					conn.Function()
+					clicked = true
+					break
+				end
+			end
+		end
+	end)
+	
+	return clicked
+end
+
+-- Build choices key for comparison
+local function GetChoicesKey(choices)
+	local letters = {}
+	for _, c in ipairs(choices) do
+		table.insert(letters, c.Letter)
+	end
+	return table.concat(letters, ",")
 end
 
 -- Main Auto Answer logic
-local AutoAnswerDebugTimer = 0
-local AutoAnswerLastChoicesKey = "" -- Track last choices to detect change
-
--- Track failed words to avoid retrying (moved to top before GetLetterChoices)
-local RetryCount = 0
-local MaxRetries = 5 -- Max retries per turn
-
--- Detect if answer was wrong (still our turn after typing, or error message visible)
-local function DetectWrongAnswer()
-	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
-	if not playerGui then return false, "no gui" end
-	
-	local inGame = playerGui:FindFirstChild("InGame")
-	if not inGame then return false, "no ingame" end
-	
-	local frame = inGame:FindFirstChild("Frame")
-	if not frame or not frame.Visible then return false, "frame not visible" end
-	
-	-- Method 1: Check for error/wrong message labels
-	for _, desc in ipairs(frame:GetDescendants()) do
-		if desc:IsA("TextLabel") and desc.Visible then
-			local text = desc.Text:lower()
-			local name = desc.Name:lower()
-			
-			-- Check for common error messages
-			if text:find("invalid") or text:find("wrong") or text:find("not a word") 
-				or text:find("already used") or text:find("doesn't exist")
-				or text:find("try again") or text:find("incorrect")
-				or name:find("error") or name:find("warning") then
-				print("[Auto Answer] Detected error message: '" .. desc.Text .. "'")
-				return true, "error message: " .. desc.Text
-			end
-		end
-	end
-	
-	-- Method 2: Check if input box still has our typed text (not cleared = rejected)
-	for _, desc in ipairs(frame:GetDescendants()) do
-		if desc:IsA("TextBox") then
-			local boxText = desc.Text:lower():gsub("%s+", "")
-			if boxText ~= "" and CurrentAnswerWord then
-				-- If textbox still has text after we typed, might be rejected
-				-- But need to wait a bit to see if it clears
-				return false, "textbox has text: " .. boxText
-			end
-		end
-	end
-	
-	return false, "no error detected"
-end
-
--- Check if there are letter choices available (IC, AB, etc or single letters W, X, Y, Z)
-local function GetLetterChoices()
-	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
-	if not playerGui then return nil end
-	
-	local inGame = playerGui:FindFirstChild("InGame")
-	if not inGame then return nil end
-	
-	local frame = inGame:FindFirstChild("Frame")
-	if not frame or not frame.Visible then return nil end
-	
-	local choicesFrame = frame:FindFirstChild("Choices")
-	if not choicesFrame or not choicesFrame.Visible then return nil end
-	
-	local choices = {}
-	for _, child in ipairs(choicesFrame:GetChildren()) do
-		if child:IsA("TextButton") and child.Visible then
-			local prefix = child.Text:upper():gsub("%s+", "")
-			-- Accept ANY letter prefix (single or multi-character like IC, AB, etc)
-			if #prefix >= 1 and prefix:match("^[A-Z]+$") then
-				table.insert(choices, prefix)
-			end
-		end
-	end
-	
-	-- Sort for consistent key
-	table.sort(choices)
-	
-	if #choices > 0 then
-		return choices
-	end
-	return nil
-end
-
 local function ProcessAutoAnswer()
 	-- Check if words are loaded
 	if not loaded then
@@ -1326,274 +1098,81 @@ local function ProcessAutoAnswer()
 	
 	-- Check if in game
 	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
-	if not playerGui then 
-		LastSeenWord = nil
-		CurrentPrefix = nil
-		CurrentAnswerWord = nil
-		WaitingForResult = false
-		RetryCount = 0
-		return 
-	end
+	if not playerGui then return end
 	
 	local inGame = playerGui:FindFirstChild("InGame")
-	if not inGame then 
-		LastSeenWord = nil
-		CurrentPrefix = nil
-		CurrentAnswerWord = nil
-		WaitingForResult = false
-		RetryCount = 0
-		return 
-	end
+	if not inGame then return end
 	
 	local frame = inGame:FindFirstChild("Frame")
-	if not frame or not frame.Visible then 
-		LastSeenWord = nil
-		CurrentPrefix = nil
-		CurrentAnswerWord = nil
-		WaitingForResult = false
-		RetryCount = 0
-		return 
+	if not frame or not frame.Visible then return end
+	
+	-- Check if it's our turn
+	if not IsMyTurn() then return end
+	
+	-- Get letter choices
+	local choices = GetLetterChoices()
+	if #choices == 0 then return end
+	
+	-- Build unique key from current choices
+	local choicesKey = GetChoicesKey(choices)
+	
+	-- Avoid processing same choices twice (this is better than word tracking)
+	if choicesKey == AutoAnswerLastChoices then return end
+	
+	-- Get current word (for display only)
+	local currentWord = GetCurrentGameWord() or ""
+	
+	print("[Auto Answer] My turn! Word: '" .. currentWord .. "'")
+	
+	-- Debug: Check WordDictionary status
+	if not WordDictionary or not next(WordDictionary) then
+		print("[Auto Answer] WARNING: WordDictionary is empty!")
+		print("[Auto Answer] loaded = " .. tostring(loaded))
+		print("[Auto Answer] #Words = " .. tostring(#Words))
 	end
 	
-	-- Check turn status
-	local myTurn, reason = IsMyTurn()
+	-- Find best letter choice (most words available)
+	local bestChoice = nil
+	local bestCount = 0
 	
-	-- Get current word displayed in game
-	local requiredLetter, currentWord = GetRequiredLetter()
-	currentWord = currentWord and currentWord:upper() or nil
-	
-	-- Check for letter choices
-	local letterChoices = GetLetterChoices()
-	
-	-- Debug: Print status every 3 seconds
-	local now = tick()
-	if now - AutoAnswerDebugTimer > 3 then
-		AutoAnswerDebugTimer = now
-		print("[Auto Answer Debug] MyTurn=" .. tostring(myTurn) .. ", CurrentWord=" .. tostring(currentWord) .. ", OriginalPrefix=" .. tostring(OriginalPrefix) .. ", Waiting=" .. tostring(WaitingForResult) .. ", Retry=" .. RetryCount)
-	end
-	
-	-- ========== SIMPLIFIED LOGIC ==========
-	
-	-- STATE: Bukan giliran kita = RESET SEMUA
-	if not myTurn then 
-		if WaitingForResult and CurrentAnswerWord then
-			-- Turn berakhir setelah kita submit = SUCCESS!
-			print("[Auto Answer] SUCCESS! Turn ended - our answer '" .. CurrentAnswerWord .. "' was accepted!")
-		end
-		LastSeenWord = nil
-		CurrentPrefix = nil
-		OriginalPrefix = nil -- Reset original prefix
-		CurrentAnswerWord = nil
-		WaitingForResult = false
-		RetryCount = 0
-		return 
-	end
-	
-	-- === GILIRAN KITA ===
-	
-	-- STATE: Sedang menunggu hasil setelah submit
-	if WaitingForResult and CurrentAnswerWord then
-		local timeSinceAnswer = tick() - LastAnswerTime
-		
-		-- SATU-SATUNYA cara detect SUCCESS: Turn berakhir (myTurn = false)
-		-- Karena myTurn masih true di sini, berarti jawaban BELUM diterima
-		
-		-- Tunggu sesuai delay setting sebelum retry
-		-- Jika setelah delay masih giliran kita = WRONG
-		if timeSinceAnswer > AutoAnswerWrongDelay then
-			print("[Auto Answer] WRONG ANSWER - still my turn after " .. string.format("%.1f", timeSinceAnswer) .. "s")
-			print("[Auto Answer] Current word: '" .. tostring(currentWord) .. "'")
-			
-			-- Mark sebagai failed
-			if CurrentAnswerWord then
-				print("[Auto Answer] Marking '" .. CurrentAnswerWord .. "' as failed")
-				FailedWords[CurrentAnswerWord:lower()] = true
-			end
-			
-			if RetryCount < MaxRetries then
-				-- Clear input
-				print("[Auto Answer] Clearing input before retry...")
-				ClearInput()
-				task.wait(0.2)
-				ClearInput()
-				task.wait(0.1)
-				
-				-- PENTING: Gunakan ORIGINAL PREFIX yang disave di awal turn
-				if OriginalPrefix then
-					CurrentPrefix = OriginalPrefix
-					print("[Auto Answer] Restored original prefix: '" .. OriginalPrefix .. "'")
-				end
-				
-				WaitingForResult = false
-				CurrentAnswerWord = nil
-				RetryCount = RetryCount + 1
-				print("[Auto Answer] Retrying... (attempt " .. RetryCount .. "/" .. MaxRetries .. ")")
-				-- Continue ke typing logic di bawah
-			else
-				print("[Auto Answer] Max retries reached, giving up this turn")
-				WaitingForResult = false
-				CurrentAnswerWord = nil
-				-- Tetap giliran kita, tapi kita menyerah
-				return
-			end
-		else
-			-- Masih dalam periode tunggu, jangan lakukan apa-apa
-			return
+	for _, choice in ipairs(choices) do
+		local count = CountWordsForLetter(choice.Letter)
+		print("[Auto Answer]   Letter '" .. choice.Letter .. "' has " .. count .. " words")
+		if count > bestCount then
+			bestCount = count
+			bestChoice = choice
 		end
 	end
 	
-	-- === MULAI TYPING ===
+	-- Mark as processed BEFORE clicking
+	AutoAnswerLastChoices = choicesKey
 	
-	print("[Auto Answer] === MY TURN! ===")
-	
-	-- Save current word sebagai reference (untuk detect change)
-	if not LastSeenWord and currentWord then
-		LastSeenWord = currentWord
-		print("[Auto Answer] Saved reference word: '" .. LastSeenWord .. "'")
-	end
-	
-	-- SCENARIO 1: Letter/Prefix choices (IC, AB, W, X, Y, Z, etc)
-	if letterChoices and #letterChoices > 0 then
-		print("[Auto Answer] Prefix choice mode: " .. table.concat(letterChoices, ", "))
+	if bestChoice and bestCount > 0 then
+		local exampleWord = FindBestWord(bestChoice.Letter)
+		print("[Auto Answer] Choosing: '" .. bestChoice.Letter .. "' (" .. bestCount .. " words, e.g. '" .. (exampleWord or "?") .. "')")
 		
-		local bestPrefix = CurrentPrefix
-		
-		if not bestPrefix then
-			local bestCount = 0
-			for _, prefix in ipairs(letterChoices) do
-				local count = CountWordsForPrefix(prefix)
-				print("[Auto Answer]   " .. prefix .. " = " .. count .. " words")
-				if count > bestCount then
-					bestCount = count
-					bestPrefix = prefix
-				end
-			end
-			
-			if not bestPrefix then
-				bestPrefix = letterChoices[1]
-				print("[Auto Answer] No words found, using first choice: " .. bestPrefix)
-			else
-				print("[Auto Answer] Best choice: " .. bestPrefix .. " (" .. bestCount .. " words)")
-			end
-			
-			CurrentPrefix = bestPrefix
-			-- SAVE ORIGINAL PREFIX - first time only!
-			if not OriginalPrefix then
-				OriginalPrefix = bestPrefix
-				print("[Auto Answer] Saved original prefix: '" .. OriginalPrefix .. "'")
-			end
-		else
-			print("[Auto Answer] Using saved prefix for retry: '" .. bestPrefix .. "'")
-		end
-		
-		local word = FindBestWordWithPrefix(bestPrefix)
-		
-		if not word then
-			print("[Auto Answer] ERROR: No word found for prefix '" .. bestPrefix .. "'!")
-			return
-		end
-		
-		print("[Auto Answer] Answer word: '" .. word .. "'")
-		
-		-- SKIP LENGTH = panjang prefix yang dipilih
-		local skipLen = #bestPrefix
-		local wordToType = word:sub(skipLen + 1)
-		
-		print("[Auto Answer] Prefix: '" .. bestPrefix .. "', Skip " .. skipLen .. " chars")
-		print("[Auto Answer] Typing: '" .. wordToType .. "'")
-		
-		CurrentAnswerWord = word
-		WaitingForResult = true
-		LastAnswerTime = tick()
-		
+		-- Wait delay before clicking
 		task.wait(AutoAnswerDelay)
 		
-		local success = TypeWord(wordToType)
-		print("[Auto Answer] Type result: " .. tostring(success))
-		print("[Auto Answer] === WAITING FOR RESULT ===")
-		return
-	end
-	
-	-- SCENARIO 2: Normal word - gunakan SELURUH currentWord sebagai prefix
-	-- Ini yang diminta user: jika word adalah "ICE", gunakan "ICE" sebagai prefix
-	local usePrefix = CurrentPrefix
-	
-	if not usePrefix then
-		if currentWord and #currentWord > 0 then
-			-- Gunakan SELURUH currentWord sebagai prefix
-			usePrefix = currentWord
-			print("[Auto Answer] Using entire displayed word as prefix: '" .. usePrefix .. "'")
-		elseif requiredLetter then
-			-- Fallback ke last letter
-			usePrefix = requiredLetter
-			print("[Auto Answer] Fallback to last letter: '" .. usePrefix .. "'")
+		-- Click the choice
+		local success = ClickLetterChoice(bestChoice)
+		if success then
+			print("[Auto Answer] Clicked '" .. bestChoice.Letter .. "'")
+		else
+			print("[Auto Answer] Failed to click button!")
 		end
-	end
-	
-	if not usePrefix then
-		print("[Auto Answer] Waiting for word to appear...")
-		return
-	end
-	
-	if not CurrentPrefix then
-		CurrentPrefix = usePrefix
-		print("[Auto Answer] Set prefix: '" .. CurrentPrefix .. "'")
-		-- SAVE ORIGINAL PREFIX - first time only!
-		if not OriginalPrefix then
-			OriginalPrefix = usePrefix
-			print("[Auto Answer] Saved original prefix: '" .. OriginalPrefix .. "'")
-		end
-	end
-	
-	print("[Auto Answer] Word mode - Using prefix: '" .. usePrefix .. "'")
-	
-	local word = FindBestWordWithPrefix(usePrefix)
-	
-	if not word then
-		-- Jika tidak ada word dengan full prefix, coba dengan last letter saja
-		local lastLetter = usePrefix:sub(-1):upper()
-		print("[Auto Answer] No word for '" .. usePrefix .. "', trying last letter: '" .. lastLetter .. "'")
-		word = FindBestWordWithPrefix(lastLetter)
+	else
+		-- Fallback: random choice
+		local randomChoice = choices[math.random(1, #choices)]
+		print("[Auto Answer] No words found, random pick: '" .. randomChoice.Letter .. "'")
 		
-		if not word then
-			print("[Auto Answer] ERROR: No word found for any prefix!")
-			return
-		end
-		
-		-- Gunakan last letter sebagai prefix
-		usePrefix = lastLetter
-		CurrentPrefix = lastLetter
+		task.wait(AutoAnswerDelay)
+		ClickLetterChoice(randomChoice)
 	end
 	
-	local wordCount = CountWordsForPrefix(usePrefix)
-	print("[Auto Answer] Answer word: '" .. word .. "' (from " .. wordCount .. " available)")
-	
-	-- SKIP LENGTH = panjang prefix yang kita gunakan
-	-- Jika prefix = "ICE" (3 huruf), skip 3 huruf
-	-- Jika prefix = "E" (1 huruf), skip 1 huruf
-	local skipLen = #usePrefix
-	
-	-- Safety check: jangan skip lebih dari panjang word
-	if skipLen >= #word then
-		skipLen = 1
-	end
-	
-	local wordToType = word:sub(skipLen + 1)
-	print("[Auto Answer] Prefix: '" .. usePrefix .. "', Skip " .. skipLen .. " chars")
-	print("[Auto Answer] Typing: '" .. wordToType .. "'")
-	
-	CurrentAnswerWord = word
-	WaitingForResult = true
-	LastAnswerTime = tick()
-	
-	task.wait(AutoAnswerDelay)
-	
-	local success = TypeWord(wordToType)
-	print("[Auto Answer] Type result: " .. tostring(success))
-	print("[Auto Answer] === WAITING FOR RESULT ===")
+	-- Small delay after clicking to prevent re-trigger
+	task.wait(0.5)
 end
-
-
 
 local function StartAutoAnswer()
 	if AutoAnswerConnection then return end
@@ -1604,23 +1183,14 @@ local function StartAutoAnswer()
 	print("[Auto Answer] Total words: " .. #Words)
 	print("[Auto Answer] Dictionary keys: " .. (WordDictionary and tostring(#(function() local k={} for l in pairs(WordDictionary) do table.insert(k,l) end return k end)()) or "nil"))
 	
-	-- Reset all state
-	FailedWords = {}
-	RetryCount = 0
-	WaitingForResult = false
-	CurrentAnswerWord = nil
-	CurrentPrefix = nil
-	OriginalPrefix = nil
-	LastSeenWord = nil
+	AutoAnswerLastChoices = ""
 	
 	AutoAnswerConnection = task.spawn(function()
 		while AutoAnswerEnabled do
-			pcall(ProcessAutoAnswer)
-			task.wait(0.5) -- Check every 500ms
+			pcall(ProcessAutoAnswer) -- Wrap in pcall to prevent crashes
+			task.wait(0.3) -- Check every 300ms
 		end
-
 		print("[Auto Answer] Stopped")
-
 	end)
 end
 
@@ -1630,13 +1200,7 @@ local function StopAutoAnswer()
 		task.cancel(AutoAnswerConnection)
 		AutoAnswerConnection = nil
 	end
-	FailedWords = {}
-	RetryCount = 0
-	WaitingForResult = false
-	CurrentAnswerWord = nil
-	CurrentPrefix = nil
-	OriginalPrefix = nil
-	LastSeenWord = nil
+	AutoAnswerLastWord = ""
 	print("[Auto Answer] Disabled")
 end
 
@@ -2924,37 +2488,9 @@ GameFeaturesBox:AddSlider('AutoAnswerDelay', {
 	Rounding = 1,
 	Suffix = 's',
 	Compact = false,
-	Tooltip = 'Delay before starting to type answer',
+	Tooltip = 'Delay before clicking letter choice',
 	Callback = function(Value)
 		AutoAnswerDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerTypingDelay', {
-	Text = 'Typing Speed',
-	Default = 0.04,
-	Min = 0.01,
-	Max = 0.2,
-	Rounding = 2,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Delay between each character typed (lower = faster)',
-	Callback = function(Value)
-		AutoAnswerTypingDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerWrongDelay', {
-	Text = 'Wrong Answer Timeout',
-	Default = 1.5,
-	Min = 0.5,
-	Max = 5,
-	Rounding = 1,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Time to wait before considering answer wrong and retrying',
-	Callback = function(Value)
-		AutoAnswerWrongDelay = Value
 	end
 })
 

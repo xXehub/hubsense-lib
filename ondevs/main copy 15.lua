@@ -75,8 +75,6 @@ local IsInGame = false -- Track if player is currently in a game
 local AutoAnswerEnabled = false
 local AutoAnswerConnection = nil
 local AutoAnswerDelay = 0.3 -- Delay before clicking answer (seconds)
-local AutoAnswerTypingDelay = 0.04 -- Delay between each character typed (seconds)
-local AutoAnswerWrongDelay = 1.5 -- Time to wait before considering answer wrong (seconds)
 local AutoAnswerMaxLength = 10 -- Max word length to prefer
 local AutoAnswerMinLength = 3 -- Min word length
 local AutoAnswerLastWord = "" -- Track last word to avoid duplicate triggers
@@ -827,7 +825,6 @@ local WaitingForResult = false
 local CurrentAnswerWord = nil -- The full word we submitted (e.g., "gracile")
 local CurrentPrefix = nil -- Track the starting prefix/letter for retries
 local LastSeenWord = nil -- The word displayed when we started our turn (e.g., "RETAXING")
-local OriginalPrefix = nil -- THE ORIGINAL PREFIX - NEVER changes during a turn, used for retry
 
 -- Get the last letter we need to start with (read full word from CurrentWord)
 local function GetRequiredLetter()
@@ -1016,8 +1013,20 @@ end
 local function ClearInput()
 	local VIM = game:GetService("VirtualInputManager")
 	
-	-- Method 1: Just use many backspaces (safer, no Ctrl+A which causes 'A' bug)
-	for i = 1, 50 do
+	-- Method 1: Select all (Ctrl+A) and delete
+	pcall(function()
+		VIM:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+		VIM:SendKeyEvent(true, Enum.KeyCode.A, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.A, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+		task.wait(0.02)
+		VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+	end)
+	task.wait(0.05)
+	
+	-- Method 2: Many backspaces to be sure
+	for i = 1, 30 do
 		pcall(function()
 			VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
 			VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
@@ -1042,10 +1051,22 @@ local function TypeWord(word)
 	local success = false
 	local maxTypeAttempts = 3
 	
-	-- Helper: Clear all input (just backspaces, no Ctrl+A to avoid 'A' bug)
+	-- Helper: Clear all input aggressively
 	local function DoClearInput()
-		-- Just use many backspaces - safer than Ctrl+A
-		for i = 1, 50 do
+		-- Ctrl+A then Backspace
+		pcall(function()
+			VIM:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+			VIM:SendKeyEvent(true, Enum.KeyCode.A, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.A, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+			task.wait(0.03)
+			VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+		end)
+		task.wait(0.05)
+		
+		-- Additional backspaces
+		for i = 1, 30 do
 			pcall(function()
 				VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
 				VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
@@ -1054,32 +1075,29 @@ local function TypeWord(word)
 		task.wait(0.05)
 	end
 	
-	-- Helper: Type a single character (only A-Z supported)
+	-- Helper: Type a single character
 	local function TypeChar(char)
-		-- Only allow A-Z characters
-		if not char:match("^[a-zA-Z]$") then
-			print("[Auto Answer] WARNING: Cannot type character '" .. char .. "' - not A-Z")
-			return false
-		end
-		
 		local keyCode = Enum.KeyCode[char:upper()]
 		if keyCode then
 			VIM:SendKeyEvent(true, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+			task.wait(0.04)
 			VIM:SendKeyEvent(false, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+			task.wait(0.04)
 			return true
 		end
 		return false
 	end
 	
-	-- Helper: Press Enter to submit (ONLY ONCE!)
+	-- Helper: Press Enter to submit
 	local function PressEnter()
-		pcall(function()
-			VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-			task.wait(0.05)
-			VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-		end)
+		for i = 1, 3 do -- Try Enter multiple times to ensure submission
+			pcall(function()
+				VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+				task.wait(0.05)
+				VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+			end)
+			task.wait(0.1)
+		end
 		print("[Auto Answer] Enter pressed (submitted)")
 	end
 	
@@ -1148,34 +1166,28 @@ local function FindBestWordWithPrefix(prefix, excludeWords)
 	excludeWords = excludeWords or {}
 	
 	-- Filter by prefix match, length preference, and exclude failed words
-	-- IMPORTANT: Only allow words with A-Z letters (no hyphens, apostrophes, etc)
 	local validWords = {}
 	for _, word in ipairs(wordList) do
 		local wordLower = word:lower()
-		-- Check if word ONLY contains letters (no special characters like - or ')
-		if wordLower:match("^[a-z]+$") then
-			-- Check if word starts with full prefix
-			if wordLower:sub(1, #prefix) == prefix then
-				local len = #word
-				-- Check length and not in exclude list
-				if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
-					if not excludeWords[wordLower] and not FailedWords[wordLower] then
-						table.insert(validWords, word)
-					end
+		-- Check if word starts with full prefix
+		if wordLower:sub(1, #prefix) == prefix then
+			local len = #word
+			-- Check length and not in exclude list
+			if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
+				if not excludeWords[wordLower] and not FailedWords[wordLower] then
+					table.insert(validWords, word)
 				end
 			end
 		end
 	end
 	
 	if #validWords == 0 then
-		-- Fallback: try any word starting with prefix (ignore length, but still only letters)
+		-- Fallback: try any word starting with prefix (ignore length)
 		for _, word in ipairs(wordList) do
 			local wordLower = word:lower()
-			if wordLower:match("^[a-z]+$") then
-				if wordLower:sub(1, #prefix) == prefix then
-					if not excludeWords[wordLower] and not FailedWords[wordLower] then
-						table.insert(validWords, word)
-					end
+			if wordLower:sub(1, #prefix) == prefix then
+				if not excludeWords[wordLower] and not FailedWords[wordLower] then
+					table.insert(validWords, word)
 				end
 			end
 		end
@@ -1208,19 +1220,15 @@ local function CountWordsForPrefix(prefix)
 	if not wordList then return 0 end
 	
 	-- Count words that start with prefix and in valid length range
-	-- IMPORTANT: Only count words with A-Z letters only (no special characters)
 	local count = 0
 	for _, word in ipairs(wordList) do
 		local wordLower = word:lower()
-		-- Only count words with letters only
-		if wordLower:match("^[a-z]+$") then
-			-- Must start with the full prefix
-			if wordLower:sub(1, #prefix) == prefix then
-				local len = #word
-				if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
-					if not FailedWords[wordLower] then
-						count = count + 1
-					end
+		-- Must start with the full prefix
+		if wordLower:sub(1, #prefix) == prefix then
+			local len = #word
+			if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
+				if not FailedWords[wordLower] then
+					count = count + 1
 				end
 			end
 		end
@@ -1369,7 +1377,7 @@ local function ProcessAutoAnswer()
 	local now = tick()
 	if now - AutoAnswerDebugTimer > 3 then
 		AutoAnswerDebugTimer = now
-		print("[Auto Answer Debug] MyTurn=" .. tostring(myTurn) .. ", CurrentWord=" .. tostring(currentWord) .. ", OriginalPrefix=" .. tostring(OriginalPrefix) .. ", Waiting=" .. tostring(WaitingForResult) .. ", Retry=" .. RetryCount)
+		print("[Auto Answer Debug] MyTurn=" .. tostring(myTurn) .. ", CurrentWord=" .. tostring(currentWord) .. ", LastSeenWord=" .. tostring(LastSeenWord) .. ", Prefix=" .. tostring(CurrentPrefix) .. ", Waiting=" .. tostring(WaitingForResult) .. ", AnswerWord=" .. tostring(CurrentAnswerWord))
 	end
 	
 	-- ========== SIMPLIFIED LOGIC ==========
@@ -1377,12 +1385,10 @@ local function ProcessAutoAnswer()
 	-- STATE: Bukan giliran kita = RESET SEMUA
 	if not myTurn then 
 		if WaitingForResult and CurrentAnswerWord then
-			-- Turn berakhir setelah kita submit = SUCCESS!
-			print("[Auto Answer] SUCCESS! Turn ended - our answer '" .. CurrentAnswerWord .. "' was accepted!")
+			print("[Auto Answer] Turn ended after we answered! SUCCESS assumed.")
 		end
 		LastSeenWord = nil
 		CurrentPrefix = nil
-		OriginalPrefix = nil -- Reset original prefix
 		CurrentAnswerWord = nil
 		WaitingForResult = false
 		RetryCount = 0
@@ -1391,53 +1397,53 @@ local function ProcessAutoAnswer()
 	
 	-- === GILIRAN KITA ===
 	
-	-- STATE: Sedang menunggu hasil setelah submit
+	-- STATE: Sedang menunggu hasil
 	if WaitingForResult and CurrentAnswerWord then
 		local timeSinceAnswer = tick() - LastAnswerTime
 		
-		-- SATU-SATUNYA cara detect SUCCESS: Turn berakhir (myTurn = false)
-		-- Karena myTurn masih true di sini, berarti jawaban BELUM diterima
-		
-		-- Tunggu sesuai delay setting sebelum retry
-		-- Jika setelah delay masih giliran kita = WRONG
-		if timeSinceAnswer > AutoAnswerWrongDelay then
-			print("[Auto Answer] WRONG ANSWER - still my turn after " .. string.format("%.1f", timeSinceAnswer) .. "s")
-			print("[Auto Answer] Current word: '" .. tostring(currentWord) .. "'")
+		-- Cara deteksi success: Word berubah dari LastSeenWord ke word yang BERBEDA
+		-- BUKAN dengan compare ke answer kita (karena word bisa error dibaca)
+		if currentWord and LastSeenWord and currentWord ~= LastSeenWord then
+			-- Word SUDAH BERUBAH! Ini artinya jawaban kita diterima
+			print("[Auto Answer] SUCCESS! Word changed from '" .. LastSeenWord .. "' to '" .. currentWord .. "'")
+			print("[Auto Answer] Our answer '" .. CurrentAnswerWord .. "' was accepted!")
 			
-			-- Mark sebagai failed
+			-- UPDATE: Sekarang currentWord jadi word baru untuk turn berikutnya
+			LastSeenWord = currentWord
+			CurrentPrefix = nil  -- Reset prefix untuk turn berikutnya
+			CurrentAnswerWord = nil
+			WaitingForResult = false
+			RetryCount = 0
+			-- Return dan tunggu turn berubah
+			return
+		end
+		
+		-- Masih word yang sama setelah 2.5 detik = SALAH
+		if timeSinceAnswer > 2.5 then
+			print("[Auto Answer] WRONG ANSWER - word unchanged after " .. string.format("%.1f", timeSinceAnswer) .. "s")
+			print("[Auto Answer] Still showing: '" .. tostring(currentWord) .. "'")
+			
 			if CurrentAnswerWord then
 				print("[Auto Answer] Marking '" .. CurrentAnswerWord .. "' as failed")
 				FailedWords[CurrentAnswerWord:lower()] = true
 			end
 			
 			if RetryCount < MaxRetries then
-				-- Clear input
-				print("[Auto Answer] Clearing input before retry...")
 				ClearInput()
-				task.wait(0.2)
-				ClearInput()
-				task.wait(0.1)
-				
-				-- PENTING: Gunakan ORIGINAL PREFIX yang disave di awal turn
-				if OriginalPrefix then
-					CurrentPrefix = OriginalPrefix
-					print("[Auto Answer] Restored original prefix: '" .. OriginalPrefix .. "'")
-				end
+				print("[Auto Answer] Will retry with same prefix: '" .. tostring(CurrentPrefix) .. "'")
 				
 				WaitingForResult = false
 				CurrentAnswerWord = nil
 				RetryCount = RetryCount + 1
 				print("[Auto Answer] Retrying... (attempt " .. RetryCount .. "/" .. MaxRetries .. ")")
-				-- Continue ke typing logic di bawah
+				-- Continue to typing logic below
 			else
-				print("[Auto Answer] Max retries reached, giving up this turn")
+				print("[Auto Answer] Max retries reached, giving up")
 				WaitingForResult = false
-				CurrentAnswerWord = nil
-				-- Tetap giliran kita, tapi kita menyerah
 				return
 			end
 		else
-			-- Masih dalam periode tunggu, jangan lakukan apa-apa
+			-- Masih dalam period tunggu
 			return
 		end
 	end
@@ -1477,11 +1483,6 @@ local function ProcessAutoAnswer()
 			end
 			
 			CurrentPrefix = bestPrefix
-			-- SAVE ORIGINAL PREFIX - first time only!
-			if not OriginalPrefix then
-				OriginalPrefix = bestPrefix
-				print("[Auto Answer] Saved original prefix: '" .. OriginalPrefix .. "'")
-			end
 		else
 			print("[Auto Answer] Using saved prefix for retry: '" .. bestPrefix .. "'")
 		end
@@ -1538,11 +1539,6 @@ local function ProcessAutoAnswer()
 	if not CurrentPrefix then
 		CurrentPrefix = usePrefix
 		print("[Auto Answer] Set prefix: '" .. CurrentPrefix .. "'")
-		-- SAVE ORIGINAL PREFIX - first time only!
-		if not OriginalPrefix then
-			OriginalPrefix = usePrefix
-			print("[Auto Answer] Saved original prefix: '" .. OriginalPrefix .. "'")
-		end
 	end
 	
 	print("[Auto Answer] Word mode - Using prefix: '" .. usePrefix .. "'")
@@ -1610,7 +1606,6 @@ local function StartAutoAnswer()
 	WaitingForResult = false
 	CurrentAnswerWord = nil
 	CurrentPrefix = nil
-	OriginalPrefix = nil
 	LastSeenWord = nil
 	
 	AutoAnswerConnection = task.spawn(function()
@@ -1635,7 +1630,6 @@ local function StopAutoAnswer()
 	WaitingForResult = false
 	CurrentAnswerWord = nil
 	CurrentPrefix = nil
-	OriginalPrefix = nil
 	LastSeenWord = nil
 	print("[Auto Answer] Disabled")
 end
@@ -2924,37 +2918,9 @@ GameFeaturesBox:AddSlider('AutoAnswerDelay', {
 	Rounding = 1,
 	Suffix = 's',
 	Compact = false,
-	Tooltip = 'Delay before starting to type answer',
+	Tooltip = 'Delay before clicking letter choice',
 	Callback = function(Value)
 		AutoAnswerDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerTypingDelay', {
-	Text = 'Typing Speed',
-	Default = 0.04,
-	Min = 0.01,
-	Max = 0.2,
-	Rounding = 2,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Delay between each character typed (lower = faster)',
-	Callback = function(Value)
-		AutoAnswerTypingDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerWrongDelay', {
-	Text = 'Wrong Answer Timeout',
-	Default = 1.5,
-	Min = 0.5,
-	Max = 5,
-	Rounding = 1,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Time to wait before considering answer wrong and retrying',
-	Callback = function(Value)
-		AutoAnswerWrongDelay = Value
 	end
 })
 

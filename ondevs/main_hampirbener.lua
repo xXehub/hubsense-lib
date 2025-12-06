@@ -75,8 +75,6 @@ local IsInGame = false -- Track if player is currently in a game
 local AutoAnswerEnabled = false
 local AutoAnswerConnection = nil
 local AutoAnswerDelay = 0.3 -- Delay before clicking answer (seconds)
-local AutoAnswerTypingDelay = 0.04 -- Delay between each character typed (seconds)
-local AutoAnswerWrongDelay = 1.5 -- Time to wait before considering answer wrong (seconds)
 local AutoAnswerMaxLength = 10 -- Max word length to prefer
 local AutoAnswerMinLength = 3 -- Min word length
 local AutoAnswerLastWord = "" -- Track last word to avoid duplicate triggers
@@ -1016,8 +1014,20 @@ end
 local function ClearInput()
 	local VIM = game:GetService("VirtualInputManager")
 	
-	-- Method 1: Just use many backspaces (safer, no Ctrl+A which causes 'A' bug)
-	for i = 1, 50 do
+	-- Method 1: Select all (Ctrl+A) and delete
+	pcall(function()
+		VIM:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+		VIM:SendKeyEvent(true, Enum.KeyCode.A, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.A, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+		task.wait(0.02)
+		VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+		VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+	end)
+	task.wait(0.05)
+	
+	-- Method 2: Many backspaces to be sure
+	for i = 1, 30 do
 		pcall(function()
 			VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
 			VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
@@ -1042,10 +1052,22 @@ local function TypeWord(word)
 	local success = false
 	local maxTypeAttempts = 3
 	
-	-- Helper: Clear all input (just backspaces, no Ctrl+A to avoid 'A' bug)
+	-- Helper: Clear all input aggressively
 	local function DoClearInput()
-		-- Just use many backspaces - safer than Ctrl+A
-		for i = 1, 50 do
+		-- Ctrl+A then Backspace
+		pcall(function()
+			VIM:SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
+			VIM:SendKeyEvent(true, Enum.KeyCode.A, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.A, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.LeftControl, false, game)
+			task.wait(0.03)
+			VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+		end)
+		task.wait(0.05)
+		
+		-- Additional backspaces
+		for i = 1, 30 do
 			pcall(function()
 				VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
 				VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
@@ -1065,9 +1087,9 @@ local function TypeWord(word)
 		local keyCode = Enum.KeyCode[char:upper()]
 		if keyCode then
 			VIM:SendKeyEvent(true, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+			task.wait(0.04)
 			VIM:SendKeyEvent(false, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+			task.wait(0.04)
 			return true
 		end
 		return false
@@ -1369,7 +1391,7 @@ local function ProcessAutoAnswer()
 	local now = tick()
 	if now - AutoAnswerDebugTimer > 3 then
 		AutoAnswerDebugTimer = now
-		print("[Auto Answer Debug] MyTurn=" .. tostring(myTurn) .. ", CurrentWord=" .. tostring(currentWord) .. ", OriginalPrefix=" .. tostring(OriginalPrefix) .. ", Waiting=" .. tostring(WaitingForResult) .. ", Retry=" .. RetryCount)
+		print("[Auto Answer Debug] MyTurn=" .. tostring(myTurn) .. ", CurrentWord=" .. tostring(currentWord) .. ", LastSeenWord=" .. tostring(LastSeenWord) .. ", Prefix=" .. tostring(CurrentPrefix) .. ", Waiting=" .. tostring(WaitingForResult) .. ", AnswerWord=" .. tostring(CurrentAnswerWord))
 	end
 	
 	-- ========== SIMPLIFIED LOGIC ==========
@@ -1377,8 +1399,7 @@ local function ProcessAutoAnswer()
 	-- STATE: Bukan giliran kita = RESET SEMUA
 	if not myTurn then 
 		if WaitingForResult and CurrentAnswerWord then
-			-- Turn berakhir setelah kita submit = SUCCESS!
-			print("[Auto Answer] SUCCESS! Turn ended - our answer '" .. CurrentAnswerWord .. "' was accepted!")
+			print("[Auto Answer] Turn ended after we answered! SUCCESS assumed.")
 		end
 		LastSeenWord = nil
 		CurrentPrefix = nil
@@ -1391,34 +1412,103 @@ local function ProcessAutoAnswer()
 	
 	-- === GILIRAN KITA ===
 	
-	-- STATE: Sedang menunggu hasil setelah submit
+	-- STATE: Sedang menunggu hasil
 	if WaitingForResult and CurrentAnswerWord then
 		local timeSinceAnswer = tick() - LastAnswerTime
+		local ourWordUpper = CurrentAnswerWord:upper()
 		
-		-- SATU-SATUNYA cara detect SUCCESS: Turn berakhir (myTurn = false)
-		-- Karena myTurn masih true di sini, berarti jawaban BELUM diterima
-		
-		-- Tunggu sesuai delay setting sebelum retry
-		-- Jika setelah delay masih giliran kita = WRONG
-		if timeSinceAnswer > AutoAnswerWrongDelay then
-			print("[Auto Answer] WRONG ANSWER - still my turn after " .. string.format("%.1f", timeSinceAnswer) .. "s")
-			print("[Auto Answer] Current word: '" .. tostring(currentWord) .. "'")
+		-- Cek apakah word sudah berubah
+		if currentWord and LastSeenWord and currentWord ~= LastSeenWord then
+			-- Word berubah! Tapi apakah ke word yang KITA submit?
 			
-			-- Mark sebagai failed
+			-- CASE 1: Word berubah ke PERSIS word kita = SUCCESS!
+			if currentWord == ourWordUpper then
+				print("[Auto Answer] SUCCESS! Word changed to our answer: '" .. currentWord .. "'")
+				LastSeenWord = currentWord
+				CurrentPrefix = nil
+				OriginalPrefix = nil -- Reset for next turn
+				CurrentAnswerWord = nil
+				WaitingForResult = false
+				RetryCount = 0
+				return
+			end
+			
+			-- CASE 2: Word berubah tapi BUKAN ke word kita
+			-- Ini bisa berarti:
+			-- a) Jawaban kita gagal tapi hanya sebagian terketik (contoh: LE -> LEE bukan LEEBOARD)
+			-- b) Ada orang lain yang jawab
+			-- c) Turn baru
+			
+			-- Cek apakah currentWord adalah BAGIAN dari answer kita (partial type)
+			-- Contoh: answer = "LEEBOARD", currentWord = "LEE" (hanya sebagian terketik)
+			local isPartialMatch = ourWordUpper:sub(1, #currentWord) == currentWord and #currentWord < #ourWordUpper
+			
+			if isPartialMatch then
+				-- Ini adalah partial type! Jawaban SALAH karena tidak lengkap
+				print("[Auto Answer] PARTIAL TYPE DETECTED! Expected '" .. ourWordUpper .. "' but got '" .. currentWord .. "'")
+				print("[Auto Answer] This means typing failed or word has special characters")
+				
+				-- Mark as failed dan retry
+				FailedWords[CurrentAnswerWord:lower()] = true
+				
+				if RetryCount < MaxRetries then
+					print("[Auto Answer] Clearing and retrying...")
+					ClearInput()
+					task.wait(0.2)
+					ClearInput()
+					task.wait(0.1)
+					
+					-- Use ORIGINAL prefix (not LastSeenWord which may have changed!)
+					if OriginalPrefix then
+						CurrentPrefix = OriginalPrefix
+						print("[Auto Answer] Restored original prefix: '" .. OriginalPrefix .. "'")
+					end
+					
+					WaitingForResult = false
+					CurrentAnswerWord = nil
+					RetryCount = RetryCount + 1
+					-- Continue to typing below
+				else
+					print("[Auto Answer] Max retries, giving up")
+					WaitingForResult = false
+					CurrentAnswerWord = nil
+					return
+				end
+			else
+				-- Word berubah ke sesuatu yang lain completely = SUCCESS atau turn baru
+				print("[Auto Answer] Word changed from '" .. LastSeenWord .. "' to '" .. currentWord .. "'")
+				print("[Auto Answer] Assuming our answer was accepted!")
+				LastSeenWord = currentWord
+				CurrentPrefix = nil
+				OriginalPrefix = nil -- Reset for next turn
+				CurrentAnswerWord = nil
+				WaitingForResult = false
+				RetryCount = 0
+				return
+			end
+		end
+		
+		-- Masih word yang sama setelah 1.5 detik = SALAH
+		if timeSinceAnswer > 1.5 then
+			print("[Auto Answer] WRONG ANSWER - word unchanged after " .. string.format("%.1f", timeSinceAnswer) .. "s")
+			print("[Auto Answer] Still showing: '" .. tostring(currentWord) .. "'")
+			
 			if CurrentAnswerWord then
 				print("[Auto Answer] Marking '" .. CurrentAnswerWord .. "' as failed")
 				FailedWords[CurrentAnswerWord:lower()] = true
 			end
 			
 			if RetryCount < MaxRetries then
-				-- Clear input
+				-- STEP 1: Clear input yang sudah ditulis
 				print("[Auto Answer] Clearing input before retry...")
 				ClearInput()
 				task.wait(0.2)
+				
+				-- STEP 2: Clear input lagi untuk memastikan benar-benar bersih
 				ClearInput()
 				task.wait(0.1)
 				
-				-- PENTING: Gunakan ORIGINAL PREFIX yang disave di awal turn
+				-- STEP 3: Gunakan ORIGINAL PREFIX yang disave di awal turn
 				if OriginalPrefix then
 					CurrentPrefix = OriginalPrefix
 					print("[Auto Answer] Restored original prefix: '" .. OriginalPrefix .. "'")
@@ -1428,16 +1518,15 @@ local function ProcessAutoAnswer()
 				CurrentAnswerWord = nil
 				RetryCount = RetryCount + 1
 				print("[Auto Answer] Retrying... (attempt " .. RetryCount .. "/" .. MaxRetries .. ")")
-				-- Continue ke typing logic di bawah
+				-- Continue to typing logic below
 			else
-				print("[Auto Answer] Max retries reached, giving up this turn")
+				print("[Auto Answer] Max retries reached, giving up")
 				WaitingForResult = false
 				CurrentAnswerWord = nil
-				-- Tetap giliran kita, tapi kita menyerah
 				return
 			end
 		else
-			-- Masih dalam periode tunggu, jangan lakukan apa-apa
+			-- Masih dalam period tunggu
 			return
 		end
 	end
@@ -2924,37 +3013,9 @@ GameFeaturesBox:AddSlider('AutoAnswerDelay', {
 	Rounding = 1,
 	Suffix = 's',
 	Compact = false,
-	Tooltip = 'Delay before starting to type answer',
+	Tooltip = 'Delay before clicking letter choice',
 	Callback = function(Value)
 		AutoAnswerDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerTypingDelay', {
-	Text = 'Typing Speed',
-	Default = 0.04,
-	Min = 0.01,
-	Max = 0.2,
-	Rounding = 2,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Delay between each character typed (lower = faster)',
-	Callback = function(Value)
-		AutoAnswerTypingDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerWrongDelay', {
-	Text = 'Wrong Answer Timeout',
-	Default = 1.5,
-	Min = 0.5,
-	Max = 5,
-	Rounding = 1,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Time to wait before considering answer wrong and retrying',
-	Callback = function(Value)
-		AutoAnswerWrongDelay = Value
 	end
 })
 
