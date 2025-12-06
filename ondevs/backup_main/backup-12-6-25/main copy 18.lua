@@ -80,8 +80,6 @@ local AutoAnswerWrongDelay = 1.5 -- Time to wait before considering answer wrong
 local AutoAnswerMaxLength = 10 -- Max word length to prefer
 local AutoAnswerMinLength = 3 -- Min word length
 local AutoAnswerLastWord = "" -- Track last word to avoid duplicate triggers
-local AutoAnswerMode = "Blatant" -- "Legit" or "Blatant"
-local AutoAnswerLegitTypingVariation = 0.03 -- Random variation in typing delay for legit mode
 
 -- Check if player is at table (using PreGame GUI visibility)
 -- IMPORTANT: Humanoid.Sit is ALWAYS false in this game - use this instead!
@@ -1067,19 +1065,9 @@ local function TypeWord(word)
 		local keyCode = Enum.KeyCode[char:upper()]
 		if keyCode then
 			VIM:SendKeyEvent(true, keyCode, false, game)
-			
-			-- Calculate delay based on mode
-			local delay = AutoAnswerTypingDelay
-			if AutoAnswerMode == "Legit" then
-				-- Add random variation for human-like typing
-				local variation = (math.random() * 2 - 1) * AutoAnswerLegitTypingVariation
-				delay = delay + variation
-				delay = math.max(0.02, delay) -- Minimum delay
-			end
-			
-			task.wait(delay)
+			task.wait(AutoAnswerTypingDelay)
 			VIM:SendKeyEvent(false, keyCode, false, game)
-			task.wait(delay)
+			task.wait(AutoAnswerTypingDelay)
 			return true
 		end
 		return false
@@ -1131,59 +1119,6 @@ local function TypeWord(word)
 	return success
 end
 
--- Score word simplicity for Legit mode (higher = more common/simple word)
-local function ScoreWordSimplicity(word)
-	local score = 100
-	local len = #word
-	
-	-- Length preference: 4-7 chars are most natural
-	if len < 4 then score = score - 10 end
-	if len > 7 then score = score - (len - 7) * 8 end
-	if len > 10 then score = score - 30 end
-	
-	-- Common endings bonus (these are very common in English)
-	if word:match("ing$") then score = score + 20 end
-	if word:match("tion$") then score = score + 15 end
-	if word:match("ed$") then score = score + 15 end
-	if word:match("ly$") then score = score + 12 end
-	if word:match("er$") then score = score + 10 end
-	if word:match("est$") then score = score + 8 end
-	if word:match("ness$") then score = score + 8 end
-	if word:match("ment$") then score = score + 8 end
-	if word:match("able$") then score = score + 10 end
-	if word:match("ible$") then score = score + 8 end
-	
-	-- Vowel ratio (words with balanced vowels are easier to recognize)
-	local vowels = select(2, word:gsub("[aeiou]", ""))
-	local vowelRatio = vowels / len
-	if vowelRatio >= 0.3 and vowelRatio <= 0.5 then
-		score = score + 15
-	elseif vowelRatio < 0.2 or vowelRatio > 0.6 then
-		score = score - 10
-	end
-	
-	-- Penalty for rare/unusual letters
-	if word:match("[qxz]") then score = score - 25 end
-	if word:match("[jkv]") then score = score - 8 end
-	
-	-- Penalty for unusual patterns
-	if word:match("([bcdfghjklmnpqrstvwxyz])%1%1") then -- Triple consonants
-		score = score - 20
-	end
-	
-	-- Bonus for common starting patterns
-	local start = word:sub(1, 2)
-	local commonStarts = {["th"]=15, ["sh"]=10, ["ch"]=10, ["wh"]=10, ["st"]=8, ["tr"]=8, ["pr"]=8, ["pl"]=8, ["br"]=8, ["cr"]=8, ["gr"]=8, ["fr"]=8, ["sp"]=8, ["sw"]=5, ["sc"]=5, ["sl"]=5, ["sm"]=5, ["sn"]=5}
-	if commonStarts[start] then
-		score = score + commonStarts[start]
-	end
-	
-	-- Bonus for starting with common single letters
-	local first = word:sub(1, 1)
-	if first:match("[satcbpmdhw]") then score = score + 5 end
-	
-	return score
-end
 
 -- Find best word starting with a PREFIX (can be multi-character like "IC")
 local function FindBestWordWithPrefix(prefix, excludeWords)
@@ -1251,29 +1186,8 @@ local function FindBestWordWithPrefix(prefix, excludeWords)
 		return nil
 	end
 	
-	-- LEGIT MODE: Pick word based on simplicity score (more common words)
-	-- BLATANT MODE: Random pick
-	if AutoAnswerMode == "Legit" then
-		-- Score all valid words and pick from top ones
-		local scored = {}
-		for _, word in ipairs(validWords) do
-			table.insert(scored, {word = word, score = ScoreWordSimplicity(word:lower())})
-		end
-		
-		-- Sort by score (highest first)
-		table.sort(scored, function(a, b) return a.score > b.score end)
-		
-		-- Pick from top 20% or top 5, whichever is larger
-		local topCount = math.max(5, math.floor(#scored * 0.2))
-		topCount = math.min(topCount, #scored)
-		
-		local chosen = scored[math.random(1, topCount)]
-		print("[Auto Answer] Legit mode: picked '" .. chosen.word .. "' (score: " .. chosen.score .. ")")
-		return chosen.word
-	else
-		-- Blatant mode: random pick
-		return validWords[math.random(1, #validWords)]
-	end
+	-- Random pick from valid words
+	return validWords[math.random(1, #validWords)]
 end
 
 -- Wrapper for single letter (backward compatible)
@@ -3002,18 +2916,6 @@ GameFeaturesBox:AddToggle('AutoAnswer', {
 	end
 })
 
-GameFeaturesBox:AddDropdown('AutoAnswerMode', {
-	Values = {'Blatant', 'Legit'},
-	Default = 1,
-	Multi = false,
-	Text = 'Answer Mode',
-	Tooltip = 'Blatant = fast random words, Legit = human-like typing with common words',
-	Callback = function(Value)
-		AutoAnswerMode = Value
-		print("[Auto Answer] Mode set to: " .. Value)
-	end
-})
-
 GameFeaturesBox:AddSlider('AutoAnswerDelay', {
 	Text = 'Click Delay',
 	Default = 0.3,
@@ -3039,20 +2941,6 @@ GameFeaturesBox:AddSlider('AutoAnswerTypingDelay', {
 	Tooltip = 'Delay between each character typed (lower = faster)',
 	Callback = function(Value)
 		AutoAnswerTypingDelay = Value
-	end
-})
-
-GameFeaturesBox:AddSlider('AutoAnswerLegitVariation', {
-	Text = 'Legit Typing Variation',
-	Default = 0.03,
-	Min = 0,
-	Max = 0.1,
-	Rounding = 2,
-	Suffix = 's',
-	Compact = false,
-	Tooltip = 'Random variation in typing speed for Legit mode (makes typing look human)',
-	Callback = function(Value)
-		AutoAnswerLegitTypingVariation = Value
 	end
 })
 

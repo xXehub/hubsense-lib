@@ -1,4 +1,4 @@
--- hubsense - Word Suggester Hub
+-- sixsense - Word Suggester Hub
 -- Skeet/GameSense Style UI
 
 local repo = 'https://raw.githubusercontent.com/xXehub/hubsense-lib/refs/heads/main/ondevs/'
@@ -80,6 +80,8 @@ local AutoAnswerWrongDelay = 1.5 -- Time to wait before considering answer wrong
 local AutoAnswerMaxLength = 10 -- Max word length to prefer
 local AutoAnswerMinLength = 3 -- Min word length
 local AutoAnswerLastWord = "" -- Track last word to avoid duplicate triggers
+local AutoAnswerMode = "Blatant" -- "Legit" or "Blatant"
+local AutoAnswerLegitTypingVariation = 0.03 -- Random variation in typing delay for legit mode
 
 -- Check if player is at table (using PreGame GUI visibility)
 -- IMPORTANT: Humanoid.Sit is ALWAYS false in this game - use this instead!
@@ -1065,9 +1067,19 @@ local function TypeWord(word)
 		local keyCode = Enum.KeyCode[char:upper()]
 		if keyCode then
 			VIM:SendKeyEvent(true, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+			
+			-- Calculate delay based on mode
+			local delay = AutoAnswerTypingDelay
+			if AutoAnswerMode == "Legit" then
+				-- Add random variation for human-like typing
+				local variation = (math.random() * 2 - 1) * AutoAnswerLegitTypingVariation
+				delay = delay + variation
+				delay = math.max(0.02, delay) -- Minimum delay
+			end
+			
+			task.wait(delay)
 			VIM:SendKeyEvent(false, keyCode, false, game)
-			task.wait(AutoAnswerTypingDelay)
+			task.wait(delay)
 			return true
 		end
 		return false
@@ -1119,6 +1131,59 @@ local function TypeWord(word)
 	return success
 end
 
+-- Score word simplicity for Legit mode (higher = more common/simple word)
+local function ScoreWordSimplicity(word)
+	local score = 100
+	local len = #word
+	
+	-- Length preference: 4-7 chars are most natural
+	if len < 4 then score = score - 10 end
+	if len > 7 then score = score - (len - 7) * 8 end
+	if len > 10 then score = score - 30 end
+	
+	-- Common endings bonus (these are very common in English)
+	if word:match("ing$") then score = score + 20 end
+	if word:match("tion$") then score = score + 15 end
+	if word:match("ed$") then score = score + 15 end
+	if word:match("ly$") then score = score + 12 end
+	if word:match("er$") then score = score + 10 end
+	if word:match("est$") then score = score + 8 end
+	if word:match("ness$") then score = score + 8 end
+	if word:match("ment$") then score = score + 8 end
+	if word:match("able$") then score = score + 10 end
+	if word:match("ible$") then score = score + 8 end
+	
+	-- Vowel ratio (words with balanced vowels are easier to recognize)
+	local vowels = select(2, word:gsub("[aeiou]", ""))
+	local vowelRatio = vowels / len
+	if vowelRatio >= 0.3 and vowelRatio <= 0.5 then
+		score = score + 15
+	elseif vowelRatio < 0.2 or vowelRatio > 0.6 then
+		score = score - 10
+	end
+	
+	-- Penalty for rare/unusual letters
+	if word:match("[qxz]") then score = score - 25 end
+	if word:match("[jkv]") then score = score - 8 end
+	
+	-- Penalty for unusual patterns
+	if word:match("([bcdfghjklmnpqrstvwxyz])%1%1") then -- Triple consonants
+		score = score - 20
+	end
+	
+	-- Bonus for common starting patterns
+	local start = word:sub(1, 2)
+	local commonStarts = {["th"]=15, ["sh"]=10, ["ch"]=10, ["wh"]=10, ["st"]=8, ["tr"]=8, ["pr"]=8, ["pl"]=8, ["br"]=8, ["cr"]=8, ["gr"]=8, ["fr"]=8, ["sp"]=8, ["sw"]=5, ["sc"]=5, ["sl"]=5, ["sm"]=5, ["sn"]=5}
+	if commonStarts[start] then
+		score = score + commonStarts[start]
+	end
+	
+	-- Bonus for starting with common single letters
+	local first = word:sub(1, 1)
+	if first:match("[satcbpmdhw]") then score = score + 5 end
+	
+	return score
+end
 
 -- Find best word starting with a PREFIX (can be multi-character like "IC")
 local function FindBestWordWithPrefix(prefix, excludeWords)
@@ -1186,8 +1251,29 @@ local function FindBestWordWithPrefix(prefix, excludeWords)
 		return nil
 	end
 	
-	-- Random pick from valid words
-	return validWords[math.random(1, #validWords)]
+	-- LEGIT MODE: Pick word based on simplicity score (more common words)
+	-- BLATANT MODE: Random pick
+	if AutoAnswerMode == "Legit" then
+		-- Score all valid words and pick from top ones
+		local scored = {}
+		for _, word in ipairs(validWords) do
+			table.insert(scored, {word = word, score = ScoreWordSimplicity(word:lower())})
+		end
+		
+		-- Sort by score (highest first)
+		table.sort(scored, function(a, b) return a.score > b.score end)
+		
+		-- Pick from top 20% or top 5, whichever is larger
+		local topCount = math.max(5, math.floor(#scored * 0.2))
+		topCount = math.min(topCount, #scored)
+		
+		local chosen = scored[math.random(1, topCount)]
+		print("[Auto Answer] Legit mode: picked '" .. chosen.word .. "' (score: " .. chosen.score .. ")")
+		return chosen.word
+	else
+		-- Blatant mode: random pick
+		return validWords[math.random(1, #validWords)]
+	end
 end
 
 -- Wrapper for single letter (backward compatible)
@@ -2506,7 +2592,7 @@ pcall(function()
 end)
 
 local Window = Library:CreateWindow({
-	Title = 'hubsense | made by elhubski',
+	Title = 'sixsense | made by elhubski',
 	Center = true,
 	AutoShow = true,
 	TabPadding = 8,
@@ -2514,10 +2600,11 @@ local Window = Library:CreateWindow({
 	Size = UDim2.fromOffset(660, 560)
 })
 
--- Side navbar: Main + Visual + Configuration
+-- Side navbar: Main + Visual + Misc + Configuration
 local Tabs = {
 	Main = Window:AddTab('Main'),
 	Visual = Window:AddTab('Visual'),
+	Misc = Window:AddTab('Misc'),
 	['Configuration'] = Window:AddTab('Configuration'),
 }
 
@@ -2699,10 +2786,10 @@ SettingsTab:AddButton({
 	end
 })
 
--- ==================== GAME FEATURES (from epic.lua if present) ====================
-local GameFeaturesBox = Tabs.Main:AddRightGroupbox('Game Features')
+-- ==================== MISC TAB - MOVEMENT & EXPLOITS ====================
+local MovementBox = Tabs.Misc:AddLeftGroupbox('Movement')
 
-GameFeaturesBox:AddSlider('WalkSpeed', {
+MovementBox:AddSlider('WalkSpeed', {
 	Text = 'Walk Speed',
 	Default = 16,
 	Min = 16,
@@ -2722,7 +2809,7 @@ GameFeaturesBox:AddSlider('WalkSpeed', {
 	end
 })
 
-GameFeaturesBox:AddSlider('JumpPower', {
+MovementBox:AddSlider('JumpPower', {
 	Text = 'Jump Power',
 	Default = 50,
 	Min = 50,
@@ -2742,61 +2829,304 @@ GameFeaturesBox:AddSlider('JumpPower', {
 	end
 })
 
-GameFeaturesBox:AddDivider()
-
-GameFeaturesBox:AddToggle('FlyHack', {
-	Text = 'Fly Hack',
-	Default = false,
-	Tooltip = 'Enable fly movement',
+MovementBox:AddSlider('Gravity', {
+	Text = 'Gravity',
+	Default = 196.2,
+	Min = 0,
+	Max = 500,
+	Rounding = 1,
+	Compact = false,
+	Tooltip = 'Default gravity is 196.2',
 	Callback = function(Value)
-		local speed = (Options.FlySpeed and Options.FlySpeed.Value) or 50
-		if Epic and Epic.toggleFly then
-			local ok, err = pcall(Epic.toggleFly, Value, speed)
-			if not ok then warn(err) end
-		else
-			-- Fallback simple fly using BodyVelocity
-			local lp = game.Players.LocalPlayer
-			local char = lp.Character or lp.CharacterAdded:Wait()
-			local hrp = char:WaitForChild('HumanoidRootPart')
-			local humanoid = char:WaitForChild('Humanoid')
-			if Value then
-				local bv = Instance.new('BodyVelocity')
-				bv.Name = 'HubSenseFlyVelocity'
-				bv.MaxForce = Vector3.new(4000, 4000, 4000)
-				bv.Parent = hrp
-				game:GetService('RunService').RenderStepped:Connect(function()
-					if not Toggles.FlyHack.Value then return end
-					local cam = workspace.CurrentCamera
-					local dir = humanoid.MoveDirection
-					if dir.Magnitude > 0 then
-						bv.Velocity = cam.CFrame.LookVector * speed
-					else
-						bv.Velocity = Vector3.new()
-					end
-				end)
-			else
-				local bv = hrp:FindFirstChild('HubSenseFlyVelocity')
-				if bv then bv:Destroy() end
-			end
-		end
+		workspace.Gravity = Value
 	end
 })
 
-GameFeaturesBox:AddSlider('FlySpeed', {
+MovementBox:AddDivider()
+
+MovementBox:AddToggle('FlyHack', {
+	Text = 'Fly Hack',
+	Default = false,
+	Tooltip = 'Enable fly movement (use WASD + Space/Ctrl)',
+	Callback = function(Value)
+		local speed = (Options.FlySpeed and Options.FlySpeed.Value) or 50
+		local lp = game.Players.LocalPlayer
+		local char = lp.Character or lp.CharacterAdded:Wait()
+		local hrp = char:WaitForChild('HumanoidRootPart')
+		local humanoid = char:WaitForChild('Humanoid')
+		
+		if Value then
+			-- Disable default physics
+			hrp.Anchored = false
+			
+			local bg = hrp:FindFirstChild('SixSenseFlyGyro') or Instance.new('BodyGyro')
+			bg.Name = 'SixSenseFlyGyro'
+			bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+			bg.P = 100000
+			bg.Parent = hrp
+			
+			local bv = hrp:FindFirstChild('SixSenseFlyVelocity') or Instance.new('BodyVelocity')
+			bv.Name = 'SixSenseFlyVelocity'
+			bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+			bv.Velocity = Vector3.new()
+			bv.Parent = hrp
+			
+			-- Connect fly loop
+			local UIS = game:GetService("UserInputService")
+			local RunService = game:GetService("RunService")
+			
+			local flyConnection
+			flyConnection = RunService.RenderStepped:Connect(function()
+				if not Toggles.FlyHack or not Toggles.FlyHack.Value then
+					flyConnection:Disconnect()
+					return
+				end
+				
+				local cam = workspace.CurrentCamera
+				local flySpeed = (Options.FlySpeed and Options.FlySpeed.Value) or 50
+				local velocity = Vector3.new()
+				
+				bg.CFrame = cam.CFrame
+				
+				if UIS:IsKeyDown(Enum.KeyCode.W) then
+					velocity = velocity + cam.CFrame.LookVector * flySpeed
+				end
+				if UIS:IsKeyDown(Enum.KeyCode.S) then
+					velocity = velocity - cam.CFrame.LookVector * flySpeed
+				end
+				if UIS:IsKeyDown(Enum.KeyCode.A) then
+					velocity = velocity - cam.CFrame.RightVector * flySpeed
+				end
+				if UIS:IsKeyDown(Enum.KeyCode.D) then
+					velocity = velocity + cam.CFrame.RightVector * flySpeed
+				end
+				if UIS:IsKeyDown(Enum.KeyCode.Space) then
+					velocity = velocity + Vector3.new(0, flySpeed, 0)
+				end
+				if UIS:IsKeyDown(Enum.KeyCode.LeftControl) or UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+					velocity = velocity - Vector3.new(0, flySpeed, 0)
+				end
+				
+				bv.Velocity = velocity
+			end)
+		else
+			local bv = hrp:FindFirstChild('SixSenseFlyVelocity')
+			local bg = hrp:FindFirstChild('SixSenseFlyGyro')
+			if bv then bv:Destroy() end
+			if bg then bg:Destroy() end
+		end
+	end
+}):AddKeyPicker('FlyKey', {
+	Default = 'F',
+	Mode = 'Toggle',
+	Text = 'Fly',
+	Modes = { 'Toggle', 'Hold' },
+})
+
+MovementBox:AddSlider('FlySpeed', {
 	Text = 'Fly Speed',
 	Default = 50,
 	Min = 10,
-	Max = 200,
+	Max = 300,
 	Rounding = 0,
 	Compact = false,
 })
 
-GameFeaturesBox:AddDivider()
+MovementBox:AddToggle('Noclip', {
+	Text = 'Noclip',
+	Default = false,
+	Tooltip = 'Walk through walls',
+	Callback = function(Value)
+		local lp = game.Players.LocalPlayer
+		local RunService = game:GetService("RunService")
+		
+		if Value then
+			local noclipConnection
+			noclipConnection = RunService.Stepped:Connect(function()
+				if not Toggles.Noclip or not Toggles.Noclip.Value then
+					noclipConnection:Disconnect()
+					-- Re-enable collision
+					if lp.Character then
+						for _, part in ipairs(lp.Character:GetDescendants()) do
+							if part:IsA("BasePart") then
+								part.CanCollide = true
+							end
+						end
+					end
+					return
+				end
+				
+				if lp.Character then
+					for _, part in ipairs(lp.Character:GetDescendants()) do
+						if part:IsA("BasePart") then
+							part.CanCollide = false
+						end
+					end
+				end
+			end)
+		end
+	end
+}):AddKeyPicker('NoclipKey', {
+	Default = 'N',
+	Mode = 'Toggle',
+	Text = 'Noclip',
+	Modes = { 'Toggle', 'Hold' },
+})
 
--- ==================== AUTO JOIN FEATURE ====================
-local AutoJoinStatusLabel = GameFeaturesBox:AddLabel('Auto Join: Disabled', true)
+MovementBox:AddToggle('InfiniteJump', {
+	Text = 'Infinite Jump',
+	Default = false,
+	Tooltip = 'Jump in mid-air',
+	Callback = function(Value)
+		-- Handled by input connection below
+	end
+}):AddKeyPicker('InfJumpKey', {
+	Default = 'J',
+	Mode = 'Toggle',
+	Text = 'Infinite Jump',
+	Modes = { 'Toggle', 'Hold', 'Always' },
+})
 
-GameFeaturesBox:AddToggle('AutoJoin', {
+-- Infinite Jump Input Handler
+local UIS = game:GetService("UserInputService")
+UIS.JumpRequest:Connect(function()
+	if Toggles.InfiniteJump and Toggles.InfiniteJump.Value then
+		local lp = game.Players.LocalPlayer
+		if lp.Character and lp.Character:FindFirstChild("Humanoid") then
+			lp.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end
+end)
+
+-- ==================== EXPLOITS BOX ====================
+local ExploitsBox = Tabs.Misc:AddLeftGroupbox('Exploits')
+
+ExploitsBox:AddToggle('AntiAFK', {
+	Text = 'Anti-AFK',
+	Default = true,
+	Tooltip = 'Prevents being kicked for inactivity',
+	Callback = function(Value)
+		if Value then
+			local vu = game:GetService("VirtualUser")
+			local antiAfkConnection
+			antiAfkConnection = game.Players.LocalPlayer.Idled:Connect(function()
+				if Toggles.AntiAFK and Toggles.AntiAFK.Value then
+					vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+					wait(1)
+					vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+				end
+			end)
+		end
+	end
+})
+
+ExploitsBox:AddButton({
+	Text = 'Rejoin Server',
+	DoubleClick = true,
+	Tooltip = 'Rejoin the current server (double click)',
+	Func = function()
+		local TPS = game:GetService("TeleportService")
+		local lp = game.Players.LocalPlayer
+		TPS:Teleport(game.PlaceId, lp)
+	end
+})
+
+ExploitsBox:AddButton({
+	Text = 'Server Hop',
+	DoubleClick = true,
+	Tooltip = 'Join a different server (double click)',
+	Func = function()
+		local TPS = game:GetService("TeleportService")
+		local Http = game:GetService("HttpService")
+		local lp = game.Players.LocalPlayer
+		
+		local servers = Http:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"))
+		
+		if servers and servers.data then
+			for _, server in ipairs(servers.data) do
+				if server.id ~= game.JobId and server.playing < server.maxPlayers then
+					TPS:TeleportToPlaceInstance(game.PlaceId, server.id, lp)
+					return
+				end
+			end
+		end
+		
+		warn("[SixSense] No available servers found")
+	end
+})
+
+ExploitsBox:AddButton({
+	Text = 'Copy Game Link',
+	DoubleClick = false,
+	Tooltip = 'Copy the current game link to clipboard',
+	Func = function()
+		if setclipboard then
+			setclipboard("https://www.roblox.com/games/" .. game.PlaceId)
+			print("[SixSense] Game link copied!")
+		else
+			warn("[SixSense] Clipboard not supported")
+		end
+	end
+})
+
+ExploitsBox:AddButton({
+	Text = 'Reset Character',
+	DoubleClick = false,
+	Tooltip = 'Respawn your character',
+	Func = function()
+		local lp = game.Players.LocalPlayer
+		if lp.Character and lp.Character:FindFirstChild("Humanoid") then
+			lp.Character.Humanoid.Health = 0
+		end
+	end
+})
+
+-- ==================== PLAYER INFO BOX ====================
+local InfoBox = Tabs.Misc:AddRightGroupbox('Player Info')
+
+local PlayerCountLabel = InfoBox:AddLabel('Players: 0', true)
+local ServerAgeLabel = InfoBox:AddLabel('Server Age: 0s', true)
+local FPSLabel = InfoBox:AddLabel('FPS: 0', true)
+local PingLabel = InfoBox:AddLabel('Ping: 0ms', true)
+
+-- Update player info every second
+task.spawn(function()
+	local RunService = game:GetService("RunService")
+	local Stats = game:GetService("Stats")
+	local startTime = tick()
+	
+	while task.wait(1) do
+		pcall(function()
+			-- Player count
+			local playerCount = #game.Players:GetPlayers()
+			PlayerCountLabel:SetText('Players: ' .. playerCount)
+			
+			-- Server age
+			local serverAge = math.floor(tick() - startTime)
+			local mins = math.floor(serverAge / 60)
+			local secs = serverAge % 60
+			ServerAgeLabel:SetText('Server Age: ' .. mins .. 'm ' .. secs .. 's')
+			
+			-- FPS
+			local fps = math.floor(1 / RunService.RenderStepped:Wait())
+			FPSLabel:SetText('FPS: ' .. fps)
+			
+			-- Ping
+			local ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+			PingLabel:SetText('Ping: ' .. ping .. 'ms')
+		end)
+	end
+end)
+
+-- ==================== AUTO FEATURES TABBOX ====================
+local AutoTabbox = Tabs.Main:AddRightTabbox('Auto Features')
+
+-- ===== AUTO TAB (Toggles with KeyPickers) =====
+local AutoTab = AutoTabbox:AddTab('Auto')
+
+local AutoJoinStatusLabel = AutoTab:AddLabel('Auto Join: Disabled', true)
+
+AutoTab:AddToggle('AutoJoin', {
 	Text = 'Auto Join Game',
 	Default = false,
 	Tooltip = 'Automatically join tables that are waiting for players',
@@ -2810,29 +3140,19 @@ GameFeaturesBox:AddToggle('AutoJoin', {
 			StopAutoJoin()
 		end
 	end
+}):AddKeyPicker('AutoJoinKey', {
+	Default = 'F3',
+	Text = 'Auto Join Keybind',
+	Modes = {'Always', 'Toggle', 'Hold'},
 })
 
-GameFeaturesBox:AddSlider('AutoJoinDelay', {
-	Text = 'Scan Delay',
-	Default = 1,
-	Min = 0.5,
-	Max = 5,
-	Rounding = 1,
-	Suffix = 's',
-	Compact = false,
-	Callback = function(Value)
-		AutoJoinDelay = Value
-	end
-})
-
-GameFeaturesBox:AddButton({
+AutoTab:AddButton({
 	Text = 'Scan Tables Now',
 	DoubleClick = false,
 	Tooltip = 'Manually scan for available tables',
 	Func = function()
 		print('[Scan] Starting manual scan...')
 		
-		-- Debug: Check if Tables folder exists
 		local Tables = workspace:FindFirstChild("Tables")
 		if not Tables then
 			AutoJoinStatusLabel:SetText('ERROR: Tables folder not found!')
@@ -2842,7 +3162,6 @@ GameFeaturesBox:AddButton({
 		
 		print('[Scan] Found Tables folder with ' .. #Tables:GetChildren() .. ' children')
 		
-		-- Debug: Print first few tables info
 		local count = 0
 		for _, tbl in ipairs(Tables:GetChildren()) do
 			if tbl:IsA("Model") and count < 3 then
@@ -2871,7 +3190,7 @@ GameFeaturesBox:AddButton({
 	end
 })
 
-GameFeaturesBox:AddButton({
+AutoTab:AddButton({
 	Text = 'Join Available Table',
 	DoubleClick = false,
 	Tooltip = 'Teleport and join an available table instantly',
@@ -2896,14 +3215,14 @@ GameFeaturesBox:AddButton({
 	end
 })
 
--- ==================== AUTO ANSWER FEATURE ====================
-GameFeaturesBox:AddDivider()
-local AutoAnswerStatusLabel = GameFeaturesBox:AddLabel('Auto Answer: Disabled', true)
+AutoTab:AddDivider()
 
-GameFeaturesBox:AddToggle('AutoAnswer', {
+local AutoAnswerStatusLabel = AutoTab:AddLabel('Auto Answer: Disabled', true)
+
+AutoTab:AddToggle('AutoAnswer', {
 	Text = 'Auto Answer',
 	Default = false,
-	Tooltip = 'Automatically pick the best letter when its your turn',
+	Tooltip = 'Automatically answer with best word when its your turn',
 	Callback = function(Value)
 		AutoAnswerEnabled = Value
 		if Value then
@@ -2914,10 +3233,88 @@ GameFeaturesBox:AddToggle('AutoAnswer', {
 			StopAutoAnswer()
 		end
 	end
+}):AddKeyPicker('AutoAnswerKey', {
+	Default = 'F4',
+	Text = 'Auto Answer Keybind',
+	Modes = {'Always', 'Toggle', 'Hold'},
 })
 
-GameFeaturesBox:AddSlider('AutoAnswerDelay', {
-	Text = 'Click Delay',
+-- Mode dropdown with dynamic slider presets
+AutoTab:AddDropdown('AutoAnswerMode', {
+	Values = {'Blatant', 'Legit'},
+	Default = 1,
+	Multi = false,
+	Text = 'Answer Mode',
+	Tooltip = 'Blatant = fast typing, Legit = human-like with common words',
+	Callback = function(Value)
+		AutoAnswerMode = Value
+		print("[Auto Answer] Mode set to: " .. Value)
+		
+		-- Apply presets based on mode
+		if Value == "Legit" then
+			-- Legit presets: slower, more human-like
+			AutoAnswerDelay = 0.5
+			AutoAnswerTypingDelay = 0.08
+			AutoAnswerLegitTypingVariation = 0.04
+			AutoAnswerWrongDelay = 2.0
+			AutoAnswerMinLength = 4
+			AutoAnswerMaxLength = 8
+			
+			-- Update sliders if they exist
+			if Options.AutoAnswerDelay then Options.AutoAnswerDelay:SetValue(0.5) end
+			if Options.AutoAnswerTypingDelay then Options.AutoAnswerTypingDelay:SetValue(0.08) end
+			if Options.AutoAnswerLegitVariation then Options.AutoAnswerLegitVariation:SetValue(0.04) end
+			if Options.AutoAnswerWrongDelay then Options.AutoAnswerWrongDelay:SetValue(2.0) end
+			if Options.AutoAnswerMinLen then Options.AutoAnswerMinLen:SetValue(4) end
+			if Options.AutoAnswerMaxLen then Options.AutoAnswerMaxLen:SetValue(8) end
+			
+			print("[Auto Answer] Applied Legit presets")
+		else
+			-- Blatant presets: fast
+			AutoAnswerDelay = 0.2
+			AutoAnswerTypingDelay = 0.02
+			AutoAnswerLegitTypingVariation = 0
+			AutoAnswerWrongDelay = 1.0
+			AutoAnswerMinLength = 3
+			AutoAnswerMaxLength = 15
+			
+			-- Update sliders if they exist
+			if Options.AutoAnswerDelay then Options.AutoAnswerDelay:SetValue(0.2) end
+			if Options.AutoAnswerTypingDelay then Options.AutoAnswerTypingDelay:SetValue(0.02) end
+			if Options.AutoAnswerLegitVariation then Options.AutoAnswerLegitVariation:SetValue(0) end
+			if Options.AutoAnswerWrongDelay then Options.AutoAnswerWrongDelay:SetValue(1.0) end
+			if Options.AutoAnswerMinLen then Options.AutoAnswerMinLen:SetValue(3) end
+			if Options.AutoAnswerMaxLen then Options.AutoAnswerMaxLen:SetValue(15) end
+			
+			print("[Auto Answer] Applied Blatant presets")
+		end
+	end
+})
+
+-- ===== SETTINGS TAB (All sliders) =====
+local AutoSettingsTab = AutoTabbox:AddTab('Settings')
+
+AutoSettingsTab:AddLabel('Auto Join Settings', true)
+
+AutoSettingsTab:AddSlider('AutoJoinDelay', {
+	Text = 'Scan Delay',
+	Default = 1,
+	Min = 0.5,
+	Max = 5,
+	Rounding = 1,
+	Suffix = 's',
+	Compact = false,
+	Tooltip = 'Delay between table scans',
+	Callback = function(Value)
+		AutoJoinDelay = Value
+	end
+})
+
+AutoSettingsTab:AddDivider()
+AutoSettingsTab:AddLabel('Auto Answer Settings', true)
+
+AutoSettingsTab:AddSlider('AutoAnswerDelay', {
+	Text = 'Start Delay',
 	Default = 0.3,
 	Min = 0.1,
 	Max = 3,
@@ -2930,7 +3327,7 @@ GameFeaturesBox:AddSlider('AutoAnswerDelay', {
 	end
 })
 
-GameFeaturesBox:AddSlider('AutoAnswerTypingDelay', {
+AutoSettingsTab:AddSlider('AutoAnswerTypingDelay', {
 	Text = 'Typing Speed',
 	Default = 0.04,
 	Min = 0.01,
@@ -2938,55 +3335,70 @@ GameFeaturesBox:AddSlider('AutoAnswerTypingDelay', {
 	Rounding = 2,
 	Suffix = 's',
 	Compact = false,
-	Tooltip = 'Delay between each character typed (lower = faster)',
+	Tooltip = 'Delay between each character (lower = faster)',
 	Callback = function(Value)
 		AutoAnswerTypingDelay = Value
 	end
 })
 
-GameFeaturesBox:AddSlider('AutoAnswerWrongDelay', {
-	Text = 'Wrong Answer Timeout',
+AutoSettingsTab:AddSlider('AutoAnswerLegitVariation', {
+	Text = 'Typing Variation',
+	Default = 0.03,
+	Min = 0,
+	Max = 0.1,
+	Rounding = 2,
+	Suffix = 's',
+	Compact = false,
+	Tooltip = 'Random variation for human-like typing (Legit mode)',
+	Callback = function(Value)
+		AutoAnswerLegitTypingVariation = Value
+	end
+})
+
+AutoSettingsTab:AddSlider('AutoAnswerWrongDelay', {
+	Text = 'Wrong Timeout',
 	Default = 1.5,
 	Min = 0.5,
 	Max = 5,
 	Rounding = 1,
 	Suffix = 's',
 	Compact = false,
-	Tooltip = 'Time to wait before considering answer wrong and retrying',
+	Tooltip = 'Time to wait before retry on wrong answer',
 	Callback = function(Value)
 		AutoAnswerWrongDelay = Value
 	end
 })
 
-GameFeaturesBox:AddSlider('AutoAnswerMinLen', {
-	Text = 'Min Word Length',
+AutoSettingsTab:AddDivider()
+AutoSettingsTab:AddLabel('Word Filter', true)
+
+AutoSettingsTab:AddSlider('AutoAnswerMinLen', {
+	Text = 'Min Length',
 	Default = 3,
 	Min = 1,
 	Max = 10,
 	Rounding = 0,
 	Suffix = ' chars',
 	Compact = false,
-	Tooltip = 'Minimum word length to consider',
+	Tooltip = 'Minimum word length',
 	Callback = function(Value)
 		AutoAnswerMinLength = Value
 	end
 })
 
-GameFeaturesBox:AddSlider('AutoAnswerMaxLen', {
-	Text = 'Max Word Length',
+AutoSettingsTab:AddSlider('AutoAnswerMaxLen', {
+	Text = 'Max Length',
 	Default = 10,
 	Min = 3,
 	Max = 30,
 	Rounding = 0,
 	Suffix = ' chars',
 	Compact = false,
-	Tooltip = 'Maximum word length to prefer',
+	Tooltip = 'Maximum word length',
 	Callback = function(Value)
 		AutoAnswerMaxLength = Value
 	end
 })
-
--- Removed old top-level Settings tab (now inside Word Search card)
 
 -- ==================== VISUAL TAB (ESP & CHAMS) ====================
 local ESPTabbox = Tabs.Visual:AddLeftTabbox('ESP & Chams')
@@ -3003,9 +3415,8 @@ ESPTab:AddToggle('EnableESP', {
 	end
 }):AddKeyPicker('ESPKeybind', {
 	Default = 'F2',
-	SyncToggleState = true,
-	Mode = 'Toggle',
 	Text = 'ESP Keybind',
+	Modes = {'Always', 'Toggle', 'Hold'},
 	NoUI = false
 })
 
@@ -3167,9 +3578,8 @@ ChamsTab:AddToggle('ChamsESP', {
 	end
 }):AddKeyPicker('ChamsKeybind', {
 	Default = 'F3',
-	SyncToggleState = true,
-	Mode = 'Toggle',
 	Text = 'Chams Keybind',
+	Modes = {'Always', 'Toggle', 'Hold'},
 	NoUI = false,
 	LayoutOrder = 2
 }):AddColorPicker('ChamsColor', {
@@ -3395,7 +3805,7 @@ local WatermarkConnection = game:GetService('RunService').RenderStepped:Connect(
 		FrameCounter = 0
 	end
 
-	Library:SetWatermark(('hubsense | %s fps | %s ms | Words: %s'):format(
+	Library:SetWatermark(('sixsense | %s fps | %s ms | Words: %s'):format(
 		math.floor(FPS),
 		math.floor(game:GetService('Stats').Network.ServerStatsItem['Data Ping']:GetValue()),
 		#Words
@@ -3406,7 +3816,7 @@ Library.KeybindFrame.Visible = true
 
 Library:OnUnload(function()
 	WatermarkConnection:Disconnect()
-	print('hubsense unloaded!')
+	print('sixsense unloaded!')
 	Library.Unloaded = true
 end)
 
@@ -3417,8 +3827,8 @@ SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
 
-ThemeManager:SetFolder('hubsense')
-SaveManager:SetFolder('hubsense/WordSuggester')
+ThemeManager:SetFolder('sixsense')
+SaveManager:SetFolder('sixsense/WordSuggester')
 
 SaveManager:BuildConfigSection(Tabs['Configuration'])
 ThemeManager:ApplyToTab(Tabs['Configuration'])

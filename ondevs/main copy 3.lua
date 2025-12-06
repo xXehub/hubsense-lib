@@ -71,6 +71,18 @@ local AutoJoinGamemode = "Last Letter" -- Target gamemode
 local AutoJoinDelay = 1 -- Delay between scans in seconds
 local IsInGame = false -- Track if player is currently in a game
 
+-- Auto Answer Variables
+local AutoAnswerEnabled = false
+local AutoAnswerConnection = nil
+local AutoAnswerDelay = 0.3 -- Delay before clicking answer (seconds)
+local AutoAnswerTypingDelay = 0.04 -- Delay between each character typed (seconds)
+local AutoAnswerWrongDelay = 1.5 -- Time to wait before considering answer wrong (seconds)
+local AutoAnswerMaxLength = 10 -- Max word length to prefer
+local AutoAnswerMinLength = 3 -- Min word length
+local AutoAnswerLastWord = "" -- Track last word to avoid duplicate triggers
+local AutoAnswerMode = "Blatant" -- "Legit" or "Blatant"
+local AutoAnswerLegitTypingVariation = 0.03 -- Random variation in typing delay for legit mode
+
 -- Check if player is at table (using PreGame GUI visibility)
 -- IMPORTANT: Humanoid.Sit is ALWAYS false in this game - use this instead!
 local function IsAtTable()
@@ -88,8 +100,9 @@ local function IsAtTable()
 end
 
 -- Auto Join Functions
-local function GetAvailableTable(minPlayers)
-	-- minPlayers: minimum number of OTHER players at table (not counting us)
+local function GetAvailableTable(minPlayers, excludeTableName)
+	-- minPlayers: minimum number of players at table
+	-- excludeTableName: name of table to exclude (e.g., current table we're leaving)
 	minPlayers = minPlayers or 1
 	
 	local Tables = workspace:FindFirstChild("Tables")
@@ -99,74 +112,93 @@ local function GetAvailableTable(minPlayers)
 	end
 	
 	local availableTables = {}
+	local skippedCount = 0
+	
+	print("[Auto Join Debug] Scanning tables... (minPlayers: " .. minPlayers .. ", exclude: " .. tostring(excludeTableName) .. ")")
 	
 	for _, tbl in ipairs(Tables:GetChildren()) do
 		if tbl:IsA("Model") then
-			local nbPlayers = nil
-			local starting = nil
-			local prompt = nil
-			local seatPart = nil
-			
-			-- Find ALL BillboardGuis and ProximityPrompts
-			for _, desc in ipairs(tbl:GetDescendants()) do
-				if desc:IsA("BillboardGui") then
-					for _, child in ipairs(desc:GetDescendants()) do
-						if child:IsA("TextLabel") then
-							if child.Name == "NbOfPlayers" then
-								nbPlayers = child.Text
-							elseif child.Name == "Starting" then
-								starting = child.Text
+			-- Skip excluded table
+			if excludeTableName and tbl.Name == excludeTableName then
+				print("[Auto Join Debug] Skip " .. tbl.Name .. " - Excluded (current table)")
+				skippedCount = skippedCount + 1
+			else
+				local nbPlayers = nil
+				local starting = nil
+				local prompt = nil
+				local seatPart = nil
+				
+				-- Find ALL BillboardGuis and ProximityPrompts
+				for _, desc in ipairs(tbl:GetDescendants()) do
+					if desc:IsA("BillboardGui") then
+						for _, child in ipairs(desc:GetDescendants()) do
+							if child:IsA("TextLabel") then
+								if child.Name == "NbOfPlayers" then
+									nbPlayers = child.Text
+								elseif child.Name == "Starting" then
+									starting = child.Text
+								end
 							end
 						end
+					elseif desc:IsA("ProximityPrompt") then
+						prompt = desc
+						local parent = desc.Parent
+						while parent and not parent:IsA("BasePart") do
+							parent = parent.Parent
+						end
+						if parent and parent:IsA("BasePart") then
+							seatPart = parent
+						end
+					elseif desc:IsA("BasePart") and desc.Name:lower():find("seat") then
+						seatPart = seatPart or desc
 					end
-				elseif desc:IsA("ProximityPrompt") then
-					prompt = desc
-					local parent = desc.Parent
-					while parent and not parent:IsA("BasePart") do
-						parent = parent.Parent
-					end
-					if parent and parent:IsA("BasePart") then
-						seatPart = parent
-					end
-				elseif desc:IsA("BasePart") and desc.Name:lower():find("seat") then
-					seatPart = seatPart or desc
 				end
-			end
-			
-			if nbPlayers and prompt and starting then
-				local current, max = nbPlayers:match("(%d+)/(%d+)")
-				if current and max then
-					current = tonumber(current)
-					max = tonumber(max)
-					
-					local isWaiting = starting:lower():find("waiting") ~= nil
-					local notFull = current < max
-					local hasEnoughPlayers = current >= minPlayers
-					
-					if notFull and isWaiting and hasEnoughPlayers then
-						table.insert(availableTables, {
-							Table = tbl,
-							Prompt = prompt,
-							SeatPart = seatPart or tbl.PrimaryPart or tbl:FindFirstChildOfClass("BasePart"),
-							Players = nbPlayers,
-							Status = starting,
-							CurrentPlayers = current,
-							MaxPlayers = max
-						})
-						print("[Auto Join Debug] Available: " .. tbl.Name .. " (" .. nbPlayers .. ")")
-					else
-						if not notFull then
-							print("[Auto Join Debug] Skip " .. tbl.Name .. " - FULL")
-						elseif not isWaiting then
-							print("[Auto Join Debug] Skip " .. tbl.Name .. " - In game")
-						elseif not hasEnoughPlayers then
-							print("[Auto Join Debug] Skip " .. tbl.Name .. " - Only " .. current .. " players (need " .. minPlayers .. "+)")
+				
+				-- Debug: show what we found
+				if not nbPlayers or not prompt or not starting then
+					print("[Auto Join Debug] Skip " .. tbl.Name .. " - Missing: " .. 
+						(nbPlayers and "" or "nbPlayers ") .. 
+						(prompt and "" or "prompt ") .. 
+						(starting and "" or "starting"))
+					skippedCount = skippedCount + 1
+				else
+					local current, max = nbPlayers:match("(%d+)/(%d+)")
+					if current and max then
+						current = tonumber(current)
+						max = tonumber(max)
+						
+						local isWaiting = starting:lower():find("waiting") ~= nil
+						local notFull = current < max
+						local hasEnoughPlayers = current >= minPlayers
+						
+						if notFull and isWaiting and hasEnoughPlayers then
+							table.insert(availableTables, {
+								Table = tbl,
+								Prompt = prompt,
+								SeatPart = seatPart or tbl.PrimaryPart or tbl:FindFirstChildOfClass("BasePart"),
+								Players = nbPlayers,
+								Status = starting,
+								CurrentPlayers = current,
+								MaxPlayers = max
+							})
+							print("[Auto Join Debug] ✓ Available: " .. tbl.Name .. " (" .. nbPlayers .. ") - " .. starting)
+						else
+							if not notFull then
+								print("[Auto Join Debug] Skip " .. tbl.Name .. " - FULL (" .. nbPlayers .. ")")
+							elseif not isWaiting then
+								print("[Auto Join Debug] Skip " .. tbl.Name .. " - In game (" .. starting .. ")")
+							elseif not hasEnoughPlayers then
+								print("[Auto Join Debug] Skip " .. tbl.Name .. " - " .. current .. " players (need " .. minPlayers .. "+)")
+							end
+							skippedCount = skippedCount + 1
 						end
 					end
 				end
 			end
 		end
 	end
+	
+	print("[Auto Join Debug] Found " .. #availableTables .. " available tables, skipped " .. skippedCount)
 	
 	if #availableTables == 0 then
 		return nil
@@ -192,40 +224,77 @@ local function GetAvailableTable(minPlayers)
 	
 	return chosen
 end
-
 -- Get current table info if player is at table
 local function GetCurrentTableInfo()
 	-- Use IsAtTable() instead of Humanoid.Sit (which is always false in this game)
 	if not IsAtTable() then
+		print("[GetCurrentTableInfo] Not at table (PreGame not visible)")
 		return nil
 	end
 	
 	-- Since we can't use SeatPart (it's nil), we need to find the table differently
 	-- Check which table has the player nearby
 	local Tables = workspace:FindFirstChild("Tables")
-	if not Tables then return nil end
+	if not Tables then 
+		print("[GetCurrentTableInfo] Tables folder not found!")
+		return nil 
+	end
 	
 	local hrp = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-	if not hrp then return nil end
+	if not hrp then 
+		print("[GetCurrentTableInfo] HumanoidRootPart not found!")
+		return nil 
+	end
 	
 	local closestTable = nil
 	local closestDist = math.huge
 	
+	print("[GetCurrentTableInfo] Player position: " .. tostring(hrp.Position))
+	
 	for _, tbl in ipairs(Tables:GetChildren()) do
 		if tbl:IsA("Model") then
-			-- Find any BasePart in table to measure distance
-			local tablePart = tbl:FindFirstChildOfClass("BasePart")
+			-- Find any BasePart in table to measure distance (try multiple parts)
+			local tablePart = nil
+			local minPartDist = math.huge
+			
+			for _, part in ipairs(tbl:GetDescendants()) do
+				if part:IsA("BasePart") then
+					local partDist = (hrp.Position - part.Position).Magnitude
+					if partDist < minPartDist then
+						minPartDist = partDist
+						tablePart = part
+					end
+				end
+			end
+			
 			if tablePart then
-				local dist = (hrp.Position - tablePart.Position).Magnitude
-				if dist < closestDist and dist < 20 then -- Within 20 studs
+				local dist = minPartDist
+				-- Increased distance threshold to 50 studs
+				if dist < closestDist and dist < 50 then
 					closestDist = dist
 					closestTable = tbl
+					print("[GetCurrentTableInfo] Candidate table: " .. tbl.Name .. " at distance " .. string.format("%.1f", dist))
 				end
 			end
 		end
 	end
 	
-	if not closestTable then return nil end
+	if not closestTable then 
+		print("[GetCurrentTableInfo] No table found within 50 studs!")
+		-- List all tables and their distances for debug
+		for _, tbl in ipairs(Tables:GetChildren()) do
+			if tbl:IsA("Model") then
+				local tablePart = tbl:FindFirstChildOfClass("BasePart")
+				if tablePart then
+					local dist = (hrp.Position - tablePart.Position).Magnitude
+					print("[GetCurrentTableInfo] Table " .. tbl.Name .. " distance: " .. string.format("%.1f", dist))
+				end
+			end
+		end
+		return nil 
+	end
+	
+	print("[GetCurrentTableInfo] Closest table: " .. closestTable.Name .. " at " .. string.format("%.1f", closestDist) .. " studs")
 	
 	-- Get table info
 	local nbPlayers = nil
@@ -237,8 +306,10 @@ local function GetCurrentTableInfo()
 				if child:IsA("TextLabel") then
 					if child.Name == "NbOfPlayers" then
 						nbPlayers = child.Text
+						print("[GetCurrentTableInfo] Found NbOfPlayers: " .. nbPlayers)
 					elseif child.Name == "Starting" then
 						starting = child.Text
+						print("[GetCurrentTableInfo] Found Starting: " .. starting)
 					end
 				end
 			end
@@ -248,6 +319,7 @@ local function GetCurrentTableInfo()
 	if nbPlayers then
 		local current, max = nbPlayers:match("(%d+)/(%d+)")
 		if current and max then
+			print("[GetCurrentTableInfo] Parsed: " .. current .. "/" .. max)
 			return {
 				Table = closestTable,
 				Players = nbPlayers,
@@ -255,6 +327,16 @@ local function GetCurrentTableInfo()
 				MaxPlayers = tonumber(max),
 				Status = starting or ""
 			}
+		else
+			print("[GetCurrentTableInfo] Failed to parse player count from: " .. nbPlayers)
+		end
+	else
+		print("[GetCurrentTableInfo] NbOfPlayers label not found in table!")
+		-- Debug: list all TextLabels in table
+		for _, desc in ipairs(closestTable:GetDescendants()) do
+			if desc:IsA("TextLabel") then
+				print("[GetCurrentTableInfo] Found TextLabel: " .. desc.Name .. " = '" .. desc.Text .. "'")
+			end
 		end
 	end
 	
@@ -263,57 +345,254 @@ end
 
 -- Leave current table
 local function LeaveTable()
-	-- Method 1: Use the known Leave button path directly
+	print("[Auto Join] Attempting to leave table...")
+	
 	local playerGui = game.Players.LocalPlayer.PlayerGui
 	local preGame = playerGui:FindFirstChild("PreGame")
 	
-	if preGame then
-		local frame = preGame:FindFirstChild("Frame")
-		if frame and frame.Visible then
-			local leaveBtn = frame:FindFirstChild("Leave")
-			if leaveBtn and leaveBtn:IsA("TextButton") then
-				print("[Auto Join] Clicking Leave button (PreGame.Frame.Leave)...")
-				-- Try multiple methods to click
-				pcall(function()
-					firesignal(leaveBtn, "MouseButton1Click")
-				end)
-				pcall(function()
-					firesignal(leaveBtn, "Activated")
-				end)
-				pcall(function()
-					if leaveBtn.Activated then
-						leaveBtn.Activated:Fire()
+	if not preGame then
+		print("[Auto Join] PreGame GUI not found - not at table?")
+		return false
+	end
+	
+	local frame = preGame:FindFirstChild("Frame")
+	if not frame then
+		print("[Auto Join] PreGame.Frame not found!")
+		return false
+	end
+	
+	if not frame.Visible then
+		print("[Auto Join] PreGame.Frame not visible - not at table?")
+		return false
+	end
+	
+	local leaveBtn = frame:FindFirstChild("Leave")
+	if not leaveBtn then
+		print("[Auto Join] Leave button not found in PreGame.Frame!")
+		-- Try searching deeper
+		for _, desc in ipairs(frame:GetDescendants()) do
+			if desc:IsA("TextButton") and (desc.Name == "Leave" or desc.Text:lower():find("leave")) then
+				leaveBtn = desc
+				print("[Auto Join] Found Leave button at: " .. desc:GetFullName())
+				break
+			end
+		end
+	end
+	
+	if not leaveBtn then
+		print("[Auto Join] Could not find Leave button anywhere!")
+		return false
+	end
+	
+	print("[Auto Join] Found Leave button: " .. leaveBtn:GetFullName())
+	print("[Auto Join] Button Visible: " .. tostring(leaveBtn.Visible))
+	print("[Auto Join] Button Text: " .. tostring(leaveBtn.Text))
+	
+	local clicked = false
+	
+	-- Method 1: getconnections + Fire (MOST RELIABLE for exploits)
+	if not clicked then
+		local ok, err = pcall(function()
+			if getconnections then
+				local connections = getconnections(leaveBtn.MouseButton1Click)
+				print("[Auto Join] MouseButton1Click connections: " .. tostring(#connections))
+				if #connections > 0 then
+					for _, conn in pairs(connections) do
+						conn:Fire()
 					end
-				end)
-				task.wait(0.5)
-				return true
+					clicked = true
+				end
+			else
+				print("[Auto Join] getconnections not available")
 			end
+		end)
+		if not ok then
+			print("[Auto Join] getconnections MouseButton1Click error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: getconnections MouseButton1Click")
 		end
 	end
 	
-	-- Method 2: Search for any Leave button in GUIs (fallback)
-	for _, gui in ipairs(playerGui:GetChildren()) do
-		for _, desc in ipairs(gui:GetDescendants()) do
-			if desc:IsA("TextButton") and desc.Text:lower() == "leave" and desc.Visible then
-				print("[Auto Join] Found Leave button: " .. desc:GetFullName())
-				pcall(function() firesignal(desc, "Activated") end)
-				pcall(function() firesignal(desc, "MouseButton1Click") end)
-				task.wait(0.5)
-				return true
+	-- Method 2: getconnections Activated
+	if not clicked then
+		local ok, err = pcall(function()
+			if getconnections then
+				local connections = getconnections(leaveBtn.Activated)
+				print("[Auto Join] Activated connections: " .. tostring(#connections))
+				if #connections > 0 then
+					for _, conn in pairs(connections) do
+						conn:Fire()
+					end
+					clicked = true
+				end
+			else
+				print("[Auto Join] getconnections not available")
 			end
+		end)
+		if not ok then
+			print("[Auto Join] getconnections Activated error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: getconnections Activated")
 		end
 	end
 	
-	-- Method 3: Jump to unseat (may not work in this game)
-	local humanoid = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid")
-	if humanoid then
-		print("[Auto Join] Jumping to leave seat...")
-		humanoid.Jump = true
-		task.wait(0.5)
+	-- Method 3: firesignal MouseButton1Click
+	if not clicked then
+		local ok, err = pcall(function()
+			if firesignal then
+				firesignal(leaveBtn, "MouseButton1Click")
+				clicked = true
+			else
+				print("[Auto Join] firesignal not available")
+			end
+		end)
+		if not ok then
+			print("[Auto Join] firesignal MouseButton1Click error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: firesignal MouseButton1Click")
+		end
+	end
+	
+	-- Method 4: firesignal Activated
+	if not clicked then
+		local ok, err = pcall(function()
+			if firesignal then
+				firesignal(leaveBtn, "Activated")
+				clicked = true
+			else
+				print("[Auto Join] firesignal not available")
+			end
+		end)
+		if not ok then
+			print("[Auto Join] firesignal Activated error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: firesignal Activated")
+		end
+	end
+	
+	-- Method 5: fireclick (some executors)
+	if not clicked then
+		local ok, err = pcall(function()
+			if fireclick then
+				fireclick(leaveBtn)
+				clicked = true
+			else
+				print("[Auto Join] fireclick not available")
+			end
+		end)
+		if not ok then
+			print("[Auto Join] fireclick error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: fireclick")
+		end
+	end
+	
+	-- Method 6: VirtualInputManager (synthesize mouse click)
+	if not clicked then
+		local ok, err = pcall(function()
+			local VirtualInputManager = game:GetService("VirtualInputManager")
+			local absPos = leaveBtn.AbsolutePosition
+			local absSize = leaveBtn.AbsoluteSize
+			local centerX = absPos.X + (absSize.X / 2)
+			local centerY = absPos.Y + (absSize.Y / 2)
+			
+			print("[Auto Join] VIM click at: " .. tostring(centerX) .. ", " .. tostring(centerY))
+			VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 1)
+			task.wait(0.05)
+			VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 1)
+			clicked = true
+		end)
+		if not ok then
+			print("[Auto Join] VirtualInputManager error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: VirtualInputManager")
+		end
+	end
+	
+	-- Method 7: mouse1click (cursor simulation)
+	if not clicked then
+		local ok, err = pcall(function()
+			if mouse1click then
+				local absPos = leaveBtn.AbsolutePosition
+				local absSize = leaveBtn.AbsoluteSize
+				local centerX = absPos.X + (absSize.X / 2)
+				local centerY = absPos.Y + (absSize.Y / 2)
+				
+				-- Move mouse and click
+				if mousemoveabs then
+					mousemoveabs(centerX, centerY)
+					task.wait(0.05)
+				end
+				mouse1click()
+				clicked = true
+			else
+				print("[Auto Join] mouse1click not available")
+			end
+		end)
+		if not ok then
+			print("[Auto Join] mouse1click error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: mouse1click")
+		end
+	end
+	
+	-- Method 8: Direct MouseButton1Click event fire (alternative)
+	if not clicked then
+		local ok, err = pcall(function()
+			-- Try to directly fire the event
+			leaveBtn.MouseButton1Click:Fire()
+			clicked = true
+		end)
+		if not ok then
+			print("[Auto Join] MouseButton1Click:Fire() error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: MouseButton1Click:Fire()")
+		end
+	end
+	
+	-- Method 9: Try using syn mouse functions (Synapse specific)
+	if not clicked then
+		local ok, err = pcall(function()
+			if syn and syn.mouse1click then
+				local absPos = leaveBtn.AbsolutePosition
+				local absSize = leaveBtn.AbsoluteSize
+				local centerX = absPos.X + (absSize.X / 2)
+				local centerY = absPos.Y + (absSize.Y / 2)
+				
+				if syn.mouse_move then
+					syn.mouse_move(centerX, centerY)
+					task.wait(0.05)
+				end
+				syn.mouse1click()
+				clicked = true
+			else
+				print("[Auto Join] syn not available")
+			end
+		end)
+		if not ok then
+			print("[Auto Join] syn.mouse1click error: " .. tostring(err))
+		elseif clicked then 
+			print("[Auto Join] SUCCESS: syn.mouse1click")
+		end
+	end
+	
+	-- If no method worked, print summary
+	if not clicked then
+		print("[Auto Join] All click methods failed! Button may need different approach.")
+	end
+	
+	-- Wait and verify if we actually left
+	task.wait(0.5)
+	
+	local stillAtTable = IsAtTable()
+	if stillAtTable then
+		print("[Auto Join] WARNING: Still at table after click attempts!")
+		-- Even if clicked=true, we might still be at table
+		return false
+	else
+		print("[Auto Join] Successfully left table!")
 		return true
 	end
-	
-	return false
 end
 
 local function TeleportToTable(tableInfo)
@@ -428,7 +707,7 @@ end
 local function StartAutoJoin()
 	if AutoJoinConnection then return end
 	
-	print("[Auto Join] Started - Priority: tables with 1+ players")
+	print("[Auto Join] Started - Will leave if alone, looking for tables with other players")
 	
 	AutoJoinConnection = task.spawn(function()
 		while AutoJoinEnabled do
@@ -455,26 +734,58 @@ local function StartAutoJoin()
 				local currentTable = GetCurrentTableInfo()
 				
 				if currentTable then
+					print("[Auto Join] At table: " .. currentTable.Table.Name .. " (" .. currentTable.Players .. ") - Status: " .. tostring(currentTable.Status))
+					
+					-- Check if alone at table (only 1 player = us)
 					if currentTable.CurrentPlayers <= 1 then
-						-- Alone at table, leave
-						print("[Auto Join] Alone at " .. currentTable.Table.Name .. " (" .. currentTable.Players .. "), leaving...")
-						LeaveTable()
-						task.wait(1)
+						-- ALONE! Force leave immediately, then find better table
+						print("[Auto Join] ALONE at " .. currentTable.Table.Name .. "! Force leaving...")
+						
+						-- First, find a better table BEFORE leaving (so we know where to go)
+						-- Exclude current table from search, and look for tables with 1+ players
+						local currentTableName = currentTable.Table.Name
+						local betterTable = GetAvailableTable(1, currentTableName)
+						
+						-- Now leave
+						local leftSuccess = LeaveTable()
+						task.wait(0.5)
+						
+						-- Verify we actually left
+						if not IsAtTable() then
+							print("[Auto Join] Left successfully!")
+							
+							if betterTable then
+								print("[Auto Join] Joining table: " .. betterTable.Table.Name .. " (" .. betterTable.Players .. ")")
+								JoinTable(betterTable)
+								task.wait(2)
+							else
+								print("[Auto Join] No tables with other players found, will retry...")
+								task.wait(AutoJoinDelay)
+							end
+						else
+							print("[Auto Join] WARNING: Still at table after leave attempt, retrying...")
+							task.wait(1)
+						end
 					else
-						-- Table has other players, stay and wait
-						print("[Auto Join] Waiting at " .. currentTable.Table.Name .. " (" .. currentTable.Players .. ")...")
+						-- Table has other players (2+), stay and wait
+						print("[Auto Join] Table has " .. currentTable.CurrentPlayers .. " players, staying...")
 						task.wait(AutoJoinDelay)
 					end
 				else
-					-- At table but can't get table info, just wait
-					print("[Auto Join] At table, waiting...")
-					task.wait(AutoJoinDelay)
+					-- At table but can't get table info - still try to leave if we detect we're alone
+					print("[Auto Join] At table but couldn't get table info, force leaving to be safe...")
+					LeaveTable()
+					task.wait(1)
 				end
 			else
 				-- Not at table, not in game - find a table to join
 				IsInGame = false
 				
-				local tableInfo = GetAvailableTable(1) -- minPlayers = 1
+				-- Prefer tables with 2+ players, but accept 1+ if nothing better
+				local tableInfo = GetAvailableTable(2, nil) -- Try 2+ players first
+				if not tableInfo then
+					tableInfo = GetAvailableTable(1, nil) -- Fallback to 1+ players
+				end
 				
 				if tableInfo then
 					print("[Auto Join] Found: " .. tableInfo.Table.Name .. " (" .. tableInfo.Players .. ")")
@@ -503,6 +814,916 @@ local function StopAutoJoin()
 		AutoJoinConnection = nil
 	end
 	print("[Auto Join] Disabled")
+end
+
+-- ==================== AUTO ANSWER FUNCTIONS ====================
+
+-- Track state for auto answer
+local AutoAnswerLastWord = ""
+local AutoAnswerTypedThisTurn = false
+
+-- Track failed words to avoid retrying them
+local FailedWords = {}
+local LastAnswerTime = 0
+local WaitingForResult = false
+local CurrentAnswerWord = nil -- The full word we submitted (e.g., "gracile")
+local CurrentPrefix = nil -- Track the starting prefix/letter for retries
+local LastSeenWord = nil -- The word displayed when we started our turn (e.g., "RETAXING")
+local OriginalPrefix = nil -- THE ORIGINAL PREFIX - NEVER changes during a turn, used for retry
+
+-- Get the last letter we need to start with (read full word from CurrentWord)
+local function GetRequiredLetter()
+	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then return nil, nil end
+	
+	local inGame = playerGui:FindFirstChild("InGame")
+	if not inGame then return nil, nil end
+	
+	local frame = inGame:FindFirstChild("Frame")
+	if not frame or not frame.Visible then return nil, nil end
+	
+	-- Method 1: Look for CurrentWord container (shows the current word to continue from)
+	local currentWordContainer = frame:FindFirstChild("CurrentWord")
+	if currentWordContainer then
+		-- APPROACH 1: Direct child frames with numbers ("1", "2", "3", etc)
+		local letterLabels = {}
+		local maxIndex = 0
+		
+		-- First, scan DIRECT children that are numbered frames
+		for _, child in ipairs(currentWordContainer:GetChildren()) do
+			if child:IsA("Frame") then
+				local num = tonumber(child.Name)
+				if num then
+					-- Look for Letter label inside this frame
+					local letterLabel = child:FindFirstChild("Letter")
+					if letterLabel and letterLabel:IsA("TextLabel") then
+						local text = letterLabel.Text
+						if text and text ~= "" and text ~= "..." then
+							letterLabels[num] = text:upper()
+							if num > maxIndex then
+								maxIndex = num
+							end
+						end
+					end
+				end
+			end
+		end
+		
+		-- Build the full word from all letters
+		if maxIndex > 0 then
+			local fullWord = ""
+			local missingCount = 0
+			for i = 1, maxIndex do
+				if letterLabels[i] then
+					fullWord = fullWord .. letterLabels[i]
+				else
+					missingCount = missingCount + 1
+				end
+			end
+			
+			-- Debug: show what we found
+			if missingCount > 0 then
+				print("[GetRequiredLetter] WARNING: Missing " .. missingCount .. " letters (maxIndex=" .. maxIndex .. ")")
+			end
+			
+			if fullWord ~= "" then
+				local lastLetter = fullWord:sub(-1):upper()
+				return lastLetter, fullWord
+			end
+		end
+		
+		-- APPROACH 2: Fallback - scan ALL descendants
+		letterLabels = {}
+		maxIndex = 0
+		
+		for _, desc in ipairs(currentWordContainer:GetDescendants()) do
+			if desc:IsA("TextLabel") and desc.Name == "Letter" then
+				local parentFrame = desc.Parent
+				if parentFrame and parentFrame:IsA("Frame") then
+					local num = tonumber(parentFrame.Name)
+					if num then
+						local text = desc.Text
+						if text and text ~= "" and text ~= "..." then
+							letterLabels[num] = text:upper()
+							if num > maxIndex then
+								maxIndex = num
+							end
+						end
+					end
+				end
+			end
+		end
+		
+		if maxIndex > 0 then
+			local fullWord = ""
+			for i = 1, maxIndex do
+				fullWord = fullWord .. (letterLabels[i] or "")
+			end
+			
+			if fullWord ~= "" then
+				local lastLetter = fullWord:sub(-1):upper()
+				return lastLetter, fullWord
+			end
+		end
+		
+		-- Fallback: Check Case container (sometimes just shows last letter)
+		local caseFrame = currentWordContainer:FindFirstChild("Case")
+		if caseFrame then
+			local letterLabel = caseFrame:FindFirstChild("Letter")
+			if letterLabel and letterLabel:IsA("TextLabel") then
+				local text = letterLabel.Text
+				if text and text ~= "..." and text ~= "" then
+					local letter = text:sub(-1):upper()
+					return letter, text
+				end
+			end
+		end
+	end
+	
+	-- Method 2: Look for any visible TextLabel with word-like content
+	for _, desc in ipairs(frame:GetDescendants()) do
+		if desc:IsA("TextLabel") and desc.Visible then
+			local text = desc.Text:gsub("%s+", "")
+			local name = desc.Name:lower()
+			
+			-- Check if it's a word label (not UI elements)
+			if name:find("word") or name:find("current") then
+				if #text >= 1 and text:match("^[A-Za-z]+$") then
+					local lastLetter = text:sub(-1):upper()
+					return lastLetter, text
+				end
+			end
+		end
+	end
+	
+	return nil, nil
+end
+
+
+-- Check if it's player's turn by detecting Type label
+local function IsMyTurn()
+	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then return false, "no PlayerGui" end
+	
+	local inGame = playerGui:FindFirstChild("InGame")
+	if not inGame then return false, "no InGame" end
+	
+	local frame = inGame:FindFirstChild("Frame")
+	if not frame or not frame.Visible then return false, "Frame not visible" end
+	
+	-- Look for Type label with player's name
+	local typeLabel = frame:FindFirstChild("Type")
+	if not typeLabel or not typeLabel:IsA("TextLabel") then 
+		return false, "no Type label" 
+	end
+	
+	local text = typeLabel.Text:lower()
+	local playerName = game.Players.LocalPlayer.Name:lower()
+	local displayName = game.Players.LocalPlayer.DisplayName:lower()
+	
+	-- Check if text contains our username or display name
+	if text:find(playerName, 1, true) then
+		return true, "matched name"
+	end
+	
+	if displayName ~= playerName and text:find(displayName, 1, true) then
+		return true, "matched displayname"
+	end
+	
+	return false, "name not in Type: '" .. typeLabel.Text .. "'"
+end
+
+-- Find the TextBox where player types their answer
+local function GetInputTextBox()
+	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then return nil end
+	
+	local inGame = playerGui:FindFirstChild("InGame")
+	if not inGame then return nil end
+	
+	local frame = inGame:FindFirstChild("Frame")
+	if not frame or not frame.Visible then return nil end
+	
+	-- Search for TextBox in Frame
+	for _, desc in ipairs(frame:GetDescendants()) do
+		if desc:IsA("TextBox") then
+			return desc
+		end
+	end
+	
+	return nil
+end
+
+-- Clear any existing input in the text box
+local function ClearInput()
+	local VIM = game:GetService("VirtualInputManager")
+	
+	-- Method 1: Just use many backspaces (safer, no Ctrl+A which causes 'A' bug)
+	for i = 1, 50 do
+		pcall(function()
+			VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+			VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+		end)
+	end
+	task.wait(0.05)
+	
+	print("[Auto Answer] Cleared input")
+end
+
+-- Type a word into the game using keyboard simulation
+-- Returns: true if successfully typed and submitted, false otherwise
+local function TypeWord(word)
+	if not word or word == "" then 
+		print("[Auto Answer] No word to type!")
+		return false 
+	end
+	
+	print("[Auto Answer] Attempting to type word: '" .. word .. "'")
+	
+	local VIM = game:GetService("VirtualInputManager")
+	local success = false
+	local maxTypeAttempts = 3
+	
+	-- Helper: Clear all input (just backspaces, no Ctrl+A to avoid 'A' bug)
+	local function DoClearInput()
+		-- Just use many backspaces - safer than Ctrl+A
+		for i = 1, 50 do
+			pcall(function()
+				VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+				VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+			end)
+		end
+		task.wait(0.05)
+	end
+	
+	-- Helper: Type a single character (only A-Z supported)
+	local function TypeChar(char)
+		-- Only allow A-Z characters
+		if not char:match("^[a-zA-Z]$") then
+			print("[Auto Answer] WARNING: Cannot type character '" .. char .. "' - not A-Z")
+			return false
+		end
+		
+		local keyCode = Enum.KeyCode[char:upper()]
+		if keyCode then
+			VIM:SendKeyEvent(true, keyCode, false, game)
+			
+			-- Calculate delay based on mode
+			local delay = AutoAnswerTypingDelay
+			if AutoAnswerMode == "Legit" then
+				-- Add random variation for human-like typing
+				local variation = (math.random() * 2 - 1) * AutoAnswerLegitTypingVariation
+				delay = delay + variation
+				delay = math.max(0.02, delay) -- Minimum delay
+			end
+			
+			task.wait(delay)
+			VIM:SendKeyEvent(false, keyCode, false, game)
+			task.wait(delay)
+			return true
+		end
+		return false
+	end
+	
+	-- Helper: Press Enter to submit (ONLY ONCE!)
+	local function PressEnter()
+		pcall(function()
+			VIM:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+			task.wait(0.05)
+			VIM:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+		end)
+		print("[Auto Answer] Enter pressed (submitted)")
+	end
+	
+	-- Type with retry loop
+	for attempt = 1, maxTypeAttempts do
+		local typeSuccess = false
+		
+		pcall(function()
+			-- Clear any existing input first
+			DoClearInput()
+			
+			-- Type each character
+			for i = 1, #word do
+				local char = word:sub(i, i)
+				TypeChar(char)
+			end
+			
+			typeSuccess = true
+		end)
+		
+		if typeSuccess then
+			success = true
+			print("[Auto Answer] Typed successfully (attempt " .. attempt .. ")")
+			break
+		else
+			print("[Auto Answer] Type failed (attempt " .. attempt .. "), retrying...")
+			task.wait(0.1)
+		end
+	end
+	
+	-- Submit with Enter
+	if success then
+		task.wait(0.1)
+		PressEnter()
+	end
+	
+	return success
+end
+
+-- Score word simplicity for Legit mode (higher = more common/simple word)
+local function ScoreWordSimplicity(word)
+	local score = 100
+	local len = #word
+	
+	-- Length preference: 4-7 chars are most natural
+	if len < 4 then score = score - 10 end
+	if len > 7 then score = score - (len - 7) * 8 end
+	if len > 10 then score = score - 30 end
+	
+	-- Common endings bonus (these are very common in English)
+	if word:match("ing$") then score = score + 20 end
+	if word:match("tion$") then score = score + 15 end
+	if word:match("ed$") then score = score + 15 end
+	if word:match("ly$") then score = score + 12 end
+	if word:match("er$") then score = score + 10 end
+	if word:match("est$") then score = score + 8 end
+	if word:match("ness$") then score = score + 8 end
+	if word:match("ment$") then score = score + 8 end
+	if word:match("able$") then score = score + 10 end
+	if word:match("ible$") then score = score + 8 end
+	
+	-- Vowel ratio (words with balanced vowels are easier to recognize)
+	local vowels = select(2, word:gsub("[aeiou]", ""))
+	local vowelRatio = vowels / len
+	if vowelRatio >= 0.3 and vowelRatio <= 0.5 then
+		score = score + 15
+	elseif vowelRatio < 0.2 or vowelRatio > 0.6 then
+		score = score - 10
+	end
+	
+	-- Penalty for rare/unusual letters
+	if word:match("[qxz]") then score = score - 25 end
+	if word:match("[jkv]") then score = score - 8 end
+	
+	-- Penalty for unusual patterns
+	if word:match("([bcdfghjklmnpqrstvwxyz])%1%1") then -- Triple consonants
+		score = score - 20
+	end
+	
+	-- Bonus for common starting patterns
+	local start = word:sub(1, 2)
+	local commonStarts = {["th"]=15, ["sh"]=10, ["ch"]=10, ["wh"]=10, ["st"]=8, ["tr"]=8, ["pr"]=8, ["pl"]=8, ["br"]=8, ["cr"]=8, ["gr"]=8, ["fr"]=8, ["sp"]=8, ["sw"]=5, ["sc"]=5, ["sl"]=5, ["sm"]=5, ["sn"]=5}
+	if commonStarts[start] then
+		score = score + commonStarts[start]
+	end
+	
+	-- Bonus for starting with common single letters
+	local first = word:sub(1, 1)
+	if first:match("[satcbpmdhw]") then score = score + 5 end
+	
+	return score
+end
+
+-- Find best word starting with a PREFIX (can be multi-character like "IC")
+local function FindBestWordWithPrefix(prefix, excludeWords)
+	if not loaded then 
+		print("[Auto Answer] Words not loaded yet!")
+		return nil 
+	end
+	if not WordDictionary then 
+		print("[Auto Answer] WordDictionary is nil!")
+		return nil 
+	end
+	
+	prefix = prefix:lower()
+	local firstLetter = prefix:sub(1, 1)
+	local wordList = WordDictionary[firstLetter]
+	
+	if not wordList then 
+		print("[Auto Answer] No wordList for letter '" .. firstLetter .. "'")
+		return nil 
+	end
+	
+	if #wordList == 0 then 
+		print("[Auto Answer] wordList empty for letter '" .. firstLetter .. "'")
+		return nil 
+	end
+	
+	excludeWords = excludeWords or {}
+	
+	-- Filter by prefix match, length preference, and exclude failed words
+	-- IMPORTANT: Only allow words with A-Z letters (no hyphens, apostrophes, etc)
+	local validWords = {}
+	for _, word in ipairs(wordList) do
+		local wordLower = word:lower()
+		-- Check if word ONLY contains letters (no special characters like - or ')
+		if wordLower:match("^[a-z]+$") then
+			-- Check if word starts with full prefix
+			if wordLower:sub(1, #prefix) == prefix then
+				local len = #word
+				-- Check length and not in exclude list
+				if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
+					if not excludeWords[wordLower] and not FailedWords[wordLower] then
+						table.insert(validWords, word)
+					end
+				end
+			end
+		end
+	end
+	
+	if #validWords == 0 then
+		-- Fallback: try any word starting with prefix (ignore length, but still only letters)
+		for _, word in ipairs(wordList) do
+			local wordLower = word:lower()
+			if wordLower:match("^[a-z]+$") then
+				if wordLower:sub(1, #prefix) == prefix then
+					if not excludeWords[wordLower] and not FailedWords[wordLower] then
+						table.insert(validWords, word)
+					end
+				end
+			end
+		end
+	end
+	
+	if #validWords == 0 then
+		print("[Auto Answer] No valid words found for prefix '" .. prefix .. "'")
+		return nil
+	end
+	
+	-- LEGIT MODE: Pick word based on simplicity score (more common words)
+	-- BLATANT MODE: Random pick
+	if AutoAnswerMode == "Legit" then
+		-- Score all valid words and pick from top ones
+		local scored = {}
+		for _, word in ipairs(validWords) do
+			table.insert(scored, {word = word, score = ScoreWordSimplicity(word:lower())})
+		end
+		
+		-- Sort by score (highest first)
+		table.sort(scored, function(a, b) return a.score > b.score end)
+		
+		-- Pick from top 20% or top 5, whichever is larger
+		local topCount = math.max(5, math.floor(#scored * 0.2))
+		topCount = math.min(topCount, #scored)
+		
+		local chosen = scored[math.random(1, topCount)]
+		print("[Auto Answer] Legit mode: picked '" .. chosen.word .. "' (score: " .. chosen.score .. ")")
+		return chosen.word
+	else
+		-- Blatant mode: random pick
+		return validWords[math.random(1, #validWords)]
+	end
+end
+
+-- Wrapper for single letter (backward compatible)
+local function FindBestWord(startLetter, excludeWords)
+	return FindBestWordWithPrefix(startLetter, excludeWords)
+end
+
+-- Count words available for a prefix (can be multi-character)
+local function CountWordsForPrefix(prefix)
+	if not loaded then return 0 end
+	if not WordDictionary then return 0 end
+	
+	-- Convert to lowercase for dictionary lookup
+	prefix = prefix:lower()
+	local firstLetter = prefix:sub(1, 1)
+	local wordList = WordDictionary[firstLetter]
+	
+	if not wordList then return 0 end
+	
+	-- Count words that start with prefix and in valid length range
+	-- IMPORTANT: Only count words with A-Z letters only (no special characters)
+	local count = 0
+	for _, word in ipairs(wordList) do
+		local wordLower = word:lower()
+		-- Only count words with letters only
+		if wordLower:match("^[a-z]+$") then
+			-- Must start with the full prefix
+			if wordLower:sub(1, #prefix) == prefix then
+				local len = #word
+				if len >= AutoAnswerMinLength and len <= AutoAnswerMaxLength then
+					if not FailedWords[wordLower] then
+						count = count + 1
+					end
+				end
+			end
+		end
+	end
+	return count
+end
+
+-- Alias for backward compatibility
+local function CountWordsForLetter(letter)
+	return CountWordsForPrefix(letter)
+end
+
+-- Main Auto Answer logic
+local AutoAnswerDebugTimer = 0
+local AutoAnswerLastChoicesKey = "" -- Track last choices to detect change
+
+-- Track failed words to avoid retrying (moved to top before GetLetterChoices)
+local RetryCount = 0
+local MaxRetries = 5 -- Max retries per turn
+
+-- Detect if answer was wrong (still our turn after typing, or error message visible)
+local function DetectWrongAnswer()
+	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then return false, "no gui" end
+	
+	local inGame = playerGui:FindFirstChild("InGame")
+	if not inGame then return false, "no ingame" end
+	
+	local frame = inGame:FindFirstChild("Frame")
+	if not frame or not frame.Visible then return false, "frame not visible" end
+	
+	-- Method 1: Check for error/wrong message labels
+	for _, desc in ipairs(frame:GetDescendants()) do
+		if desc:IsA("TextLabel") and desc.Visible then
+			local text = desc.Text:lower()
+			local name = desc.Name:lower()
+			
+			-- Check for common error messages
+			if text:find("invalid") or text:find("wrong") or text:find("not a word") 
+				or text:find("already used") or text:find("doesn't exist")
+				or text:find("try again") or text:find("incorrect")
+				or name:find("error") or name:find("warning") then
+				print("[Auto Answer] Detected error message: '" .. desc.Text .. "'")
+				return true, "error message: " .. desc.Text
+			end
+		end
+	end
+	
+	-- Method 2: Check if input box still has our typed text (not cleared = rejected)
+	for _, desc in ipairs(frame:GetDescendants()) do
+		if desc:IsA("TextBox") then
+			local boxText = desc.Text:lower():gsub("%s+", "")
+			if boxText ~= "" and CurrentAnswerWord then
+				-- If textbox still has text after we typed, might be rejected
+				-- But need to wait a bit to see if it clears
+				return false, "textbox has text: " .. boxText
+			end
+		end
+	end
+	
+	return false, "no error detected"
+end
+
+-- Check if there are letter choices available (IC, AB, etc or single letters W, X, Y, Z)
+local function GetLetterChoices()
+	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then return nil end
+	
+	local inGame = playerGui:FindFirstChild("InGame")
+	if not inGame then return nil end
+	
+	local frame = inGame:FindFirstChild("Frame")
+	if not frame or not frame.Visible then return nil end
+	
+	local choicesFrame = frame:FindFirstChild("Choices")
+	if not choicesFrame or not choicesFrame.Visible then return nil end
+	
+	local choices = {}
+	for _, child in ipairs(choicesFrame:GetChildren()) do
+		if child:IsA("TextButton") and child.Visible then
+			local prefix = child.Text:upper():gsub("%s+", "")
+			-- Accept ANY letter prefix (single or multi-character like IC, AB, etc)
+			if #prefix >= 1 and prefix:match("^[A-Z]+$") then
+				table.insert(choices, prefix)
+			end
+		end
+	end
+	
+	-- Sort for consistent key
+	table.sort(choices)
+	
+	if #choices > 0 then
+		return choices
+	end
+	return nil
+end
+
+local function ProcessAutoAnswer()
+	-- Check if words are loaded
+	if not loaded then
+		return
+	end
+	
+	-- Check if in game
+	local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if not playerGui then 
+		LastSeenWord = nil
+		CurrentPrefix = nil
+		CurrentAnswerWord = nil
+		WaitingForResult = false
+		RetryCount = 0
+		return 
+	end
+	
+	local inGame = playerGui:FindFirstChild("InGame")
+	if not inGame then 
+		LastSeenWord = nil
+		CurrentPrefix = nil
+		CurrentAnswerWord = nil
+		WaitingForResult = false
+		RetryCount = 0
+		return 
+	end
+	
+	local frame = inGame:FindFirstChild("Frame")
+	if not frame or not frame.Visible then 
+		LastSeenWord = nil
+		CurrentPrefix = nil
+		CurrentAnswerWord = nil
+		WaitingForResult = false
+		RetryCount = 0
+		return 
+	end
+	
+	-- Check turn status
+	local myTurn, reason = IsMyTurn()
+	
+	-- Get current word displayed in game
+	local requiredLetter, currentWord = GetRequiredLetter()
+	currentWord = currentWord and currentWord:upper() or nil
+	
+	-- Check for letter choices
+	local letterChoices = GetLetterChoices()
+	
+	-- Debug: Print status every 3 seconds
+	local now = tick()
+	if now - AutoAnswerDebugTimer > 3 then
+		AutoAnswerDebugTimer = now
+		print("[Auto Answer Debug] MyTurn=" .. tostring(myTurn) .. ", CurrentWord=" .. tostring(currentWord) .. ", OriginalPrefix=" .. tostring(OriginalPrefix) .. ", Waiting=" .. tostring(WaitingForResult) .. ", Retry=" .. RetryCount)
+	end
+	
+	-- ========== SIMPLIFIED LOGIC ==========
+	
+	-- STATE: Bukan giliran kita = RESET SEMUA
+	if not myTurn then 
+		if WaitingForResult and CurrentAnswerWord then
+			-- Turn berakhir setelah kita submit = SUCCESS!
+			print("[Auto Answer] SUCCESS! Turn ended - our answer '" .. CurrentAnswerWord .. "' was accepted!")
+		end
+		LastSeenWord = nil
+		CurrentPrefix = nil
+		OriginalPrefix = nil -- Reset original prefix
+		CurrentAnswerWord = nil
+		WaitingForResult = false
+		RetryCount = 0
+		return 
+	end
+	
+	-- === GILIRAN KITA ===
+	
+	-- STATE: Sedang menunggu hasil setelah submit
+	if WaitingForResult and CurrentAnswerWord then
+		local timeSinceAnswer = tick() - LastAnswerTime
+		
+		-- SATU-SATUNYA cara detect SUCCESS: Turn berakhir (myTurn = false)
+		-- Karena myTurn masih true di sini, berarti jawaban BELUM diterima
+		
+		-- Tunggu sesuai delay setting sebelum retry
+		-- Jika setelah delay masih giliran kita = WRONG
+		if timeSinceAnswer > AutoAnswerWrongDelay then
+			print("[Auto Answer] WRONG ANSWER - still my turn after " .. string.format("%.1f", timeSinceAnswer) .. "s")
+			print("[Auto Answer] Current word: '" .. tostring(currentWord) .. "'")
+			
+			-- Mark sebagai failed
+			if CurrentAnswerWord then
+				print("[Auto Answer] Marking '" .. CurrentAnswerWord .. "' as failed")
+				FailedWords[CurrentAnswerWord:lower()] = true
+			end
+			
+			if RetryCount < MaxRetries then
+				-- Clear input
+				print("[Auto Answer] Clearing input before retry...")
+				ClearInput()
+				task.wait(0.2)
+				ClearInput()
+				task.wait(0.1)
+				
+				-- PENTING: Gunakan ORIGINAL PREFIX yang disave di awal turn
+				if OriginalPrefix then
+					CurrentPrefix = OriginalPrefix
+					print("[Auto Answer] Restored original prefix: '" .. OriginalPrefix .. "'")
+				end
+				
+				WaitingForResult = false
+				CurrentAnswerWord = nil
+				RetryCount = RetryCount + 1
+				print("[Auto Answer] Retrying... (attempt " .. RetryCount .. "/" .. MaxRetries .. ")")
+				-- Continue ke typing logic di bawah
+			else
+				print("[Auto Answer] Max retries reached, giving up this turn")
+				WaitingForResult = false
+				CurrentAnswerWord = nil
+				-- Tetap giliran kita, tapi kita menyerah
+				return
+			end
+		else
+			-- Masih dalam periode tunggu, jangan lakukan apa-apa
+			return
+		end
+	end
+	
+	-- === MULAI TYPING ===
+	
+	print("[Auto Answer] === MY TURN! ===")
+	
+	-- Save current word sebagai reference (untuk detect change)
+	if not LastSeenWord and currentWord then
+		LastSeenWord = currentWord
+		print("[Auto Answer] Saved reference word: '" .. LastSeenWord .. "'")
+	end
+	
+	-- SCENARIO 1: Letter/Prefix choices (IC, AB, W, X, Y, Z, etc)
+	if letterChoices and #letterChoices > 0 then
+		print("[Auto Answer] Prefix choice mode: " .. table.concat(letterChoices, ", "))
+		
+		local bestPrefix = CurrentPrefix
+		
+		if not bestPrefix then
+			local bestCount = 0
+			for _, prefix in ipairs(letterChoices) do
+				local count = CountWordsForPrefix(prefix)
+				print("[Auto Answer]   " .. prefix .. " = " .. count .. " words")
+				if count > bestCount then
+					bestCount = count
+					bestPrefix = prefix
+				end
+			end
+			
+			if not bestPrefix then
+				bestPrefix = letterChoices[1]
+				print("[Auto Answer] No words found, using first choice: " .. bestPrefix)
+			else
+				print("[Auto Answer] Best choice: " .. bestPrefix .. " (" .. bestCount .. " words)")
+			end
+			
+			CurrentPrefix = bestPrefix
+			-- SAVE ORIGINAL PREFIX - first time only!
+			if not OriginalPrefix then
+				OriginalPrefix = bestPrefix
+				print("[Auto Answer] Saved original prefix: '" .. OriginalPrefix .. "'")
+			end
+		else
+			print("[Auto Answer] Using saved prefix for retry: '" .. bestPrefix .. "'")
+		end
+		
+		local word = FindBestWordWithPrefix(bestPrefix)
+		
+		if not word then
+			print("[Auto Answer] ERROR: No word found for prefix '" .. bestPrefix .. "'!")
+			return
+		end
+		
+		print("[Auto Answer] Answer word: '" .. word .. "'")
+		
+		-- SKIP LENGTH = panjang prefix yang dipilih
+		local skipLen = #bestPrefix
+		local wordToType = word:sub(skipLen + 1)
+		
+		print("[Auto Answer] Prefix: '" .. bestPrefix .. "', Skip " .. skipLen .. " chars")
+		print("[Auto Answer] Typing: '" .. wordToType .. "'")
+		
+		CurrentAnswerWord = word
+		WaitingForResult = true
+		LastAnswerTime = tick()
+		
+		task.wait(AutoAnswerDelay)
+		
+		local success = TypeWord(wordToType)
+		print("[Auto Answer] Type result: " .. tostring(success))
+		print("[Auto Answer] === WAITING FOR RESULT ===")
+		return
+	end
+	
+	-- SCENARIO 2: Normal word - gunakan SELURUH currentWord sebagai prefix
+	-- Ini yang diminta user: jika word adalah "ICE", gunakan "ICE" sebagai prefix
+	local usePrefix = CurrentPrefix
+	
+	if not usePrefix then
+		if currentWord and #currentWord > 0 then
+			-- Gunakan SELURUH currentWord sebagai prefix
+			usePrefix = currentWord
+			print("[Auto Answer] Using entire displayed word as prefix: '" .. usePrefix .. "'")
+		elseif requiredLetter then
+			-- Fallback ke last letter
+			usePrefix = requiredLetter
+			print("[Auto Answer] Fallback to last letter: '" .. usePrefix .. "'")
+		end
+	end
+	
+	if not usePrefix then
+		print("[Auto Answer] Waiting for word to appear...")
+		return
+	end
+	
+	if not CurrentPrefix then
+		CurrentPrefix = usePrefix
+		print("[Auto Answer] Set prefix: '" .. CurrentPrefix .. "'")
+		-- SAVE ORIGINAL PREFIX - first time only!
+		if not OriginalPrefix then
+			OriginalPrefix = usePrefix
+			print("[Auto Answer] Saved original prefix: '" .. OriginalPrefix .. "'")
+		end
+	end
+	
+	print("[Auto Answer] Word mode - Using prefix: '" .. usePrefix .. "'")
+	
+	local word = FindBestWordWithPrefix(usePrefix)
+	
+	if not word then
+		-- Jika tidak ada word dengan full prefix, coba dengan last letter saja
+		local lastLetter = usePrefix:sub(-1):upper()
+		print("[Auto Answer] No word for '" .. usePrefix .. "', trying last letter: '" .. lastLetter .. "'")
+		word = FindBestWordWithPrefix(lastLetter)
+		
+		if not word then
+			print("[Auto Answer] ERROR: No word found for any prefix!")
+			return
+		end
+		
+		-- Gunakan last letter sebagai prefix
+		usePrefix = lastLetter
+		CurrentPrefix = lastLetter
+	end
+	
+	local wordCount = CountWordsForPrefix(usePrefix)
+	print("[Auto Answer] Answer word: '" .. word .. "' (from " .. wordCount .. " available)")
+	
+	-- SKIP LENGTH = panjang prefix yang kita gunakan
+	-- Jika prefix = "ICE" (3 huruf), skip 3 huruf
+	-- Jika prefix = "E" (1 huruf), skip 1 huruf
+	local skipLen = #usePrefix
+	
+	-- Safety check: jangan skip lebih dari panjang word
+	if skipLen >= #word then
+		skipLen = 1
+	end
+	
+	local wordToType = word:sub(skipLen + 1)
+	print("[Auto Answer] Prefix: '" .. usePrefix .. "', Skip " .. skipLen .. " chars")
+	print("[Auto Answer] Typing: '" .. wordToType .. "'")
+	
+	CurrentAnswerWord = word
+	WaitingForResult = true
+	LastAnswerTime = tick()
+	
+	task.wait(AutoAnswerDelay)
+	
+	local success = TypeWord(wordToType)
+	print("[Auto Answer] Type result: " .. tostring(success))
+	print("[Auto Answer] === WAITING FOR RESULT ===")
+end
+
+
+
+local function StartAutoAnswer()
+	if AutoAnswerConnection then return end
+	
+	-- Debug: Check if words loaded
+	print("[Auto Answer] Started")
+	print("[Auto Answer] Words loaded: " .. tostring(loaded))
+	print("[Auto Answer] Total words: " .. #Words)
+	print("[Auto Answer] Dictionary keys: " .. (WordDictionary and tostring(#(function() local k={} for l in pairs(WordDictionary) do table.insert(k,l) end return k end)()) or "nil"))
+	
+	-- Reset all state
+	FailedWords = {}
+	RetryCount = 0
+	WaitingForResult = false
+	CurrentAnswerWord = nil
+	CurrentPrefix = nil
+	OriginalPrefix = nil
+	LastSeenWord = nil
+	
+	AutoAnswerConnection = task.spawn(function()
+		while AutoAnswerEnabled do
+			pcall(ProcessAutoAnswer)
+			task.wait(0.5) -- Check every 500ms
+		end
+
+		print("[Auto Answer] Stopped")
+
+	end)
+end
+
+local function StopAutoAnswer()
+	AutoAnswerEnabled = false
+	if AutoAnswerConnection then
+		task.cancel(AutoAnswerConnection)
+		AutoAnswerConnection = nil
+	end
+	FailedWords = {}
+	RetryCount = 0
+	WaitingForResult = false
+	CurrentAnswerWord = nil
+	CurrentPrefix = nil
+	OriginalPrefix = nil
+	LastSeenWord = nil
+	print("[Auto Answer] Disabled")
 end
 
 -- Load Words Function
@@ -1658,10 +2879,15 @@ GameFeaturesBox:AddSlider('FlySpeed', {
 
 GameFeaturesBox:AddDivider()
 
--- ==================== AUTO JOIN FEATURE ====================
-local AutoJoinStatusLabel = GameFeaturesBox:AddLabel('Auto Join: Disabled', true)
+-- ==================== AUTO FEATURES TABBOX ====================
+local AutoTabbox = Tabs.Main:AddRightTabbox('Auto Features')
 
-GameFeaturesBox:AddToggle('AutoJoin', {
+-- ===== AUTO TAB (Toggles with KeyPickers) =====
+local AutoTab = AutoTabbox:AddTab('Auto')
+
+local AutoJoinStatusLabel = AutoTab:AddLabel('Auto Join: Disabled', true)
+
+AutoTab:AddToggle('AutoJoin', {
 	Text = 'Auto Join Game',
 	Default = false,
 	Tooltip = 'Automatically join tables that are waiting for players',
@@ -1675,29 +2901,20 @@ GameFeaturesBox:AddToggle('AutoJoin', {
 			StopAutoJoin()
 		end
 	end
+}):AddKeyPicker('AutoJoinKey', {
+	Default = 'F3',
+	SyncToggleState = true,
+	Mode = 'Toggle',
+	Text = 'Auto Join Keybind',
 })
 
-GameFeaturesBox:AddSlider('AutoJoinDelay', {
-	Text = 'Scan Delay',
-	Default = 1,
-	Min = 0.5,
-	Max = 5,
-	Rounding = 1,
-	Suffix = 's',
-	Compact = false,
-	Callback = function(Value)
-		AutoJoinDelay = Value
-	end
-})
-
-GameFeaturesBox:AddButton({
+AutoTab:AddButton({
 	Text = 'Scan Tables Now',
 	DoubleClick = false,
 	Tooltip = 'Manually scan for available tables',
 	Func = function()
 		print('[Scan] Starting manual scan...')
 		
-		-- Debug: Check if Tables folder exists
 		local Tables = workspace:FindFirstChild("Tables")
 		if not Tables then
 			AutoJoinStatusLabel:SetText('ERROR: Tables folder not found!')
@@ -1707,7 +2924,6 @@ GameFeaturesBox:AddButton({
 		
 		print('[Scan] Found Tables folder with ' .. #Tables:GetChildren() .. ' children')
 		
-		-- Debug: Print first few tables info
 		local count = 0
 		for _, tbl in ipairs(Tables:GetChildren()) do
 			if tbl:IsA("Model") and count < 3 then
@@ -1736,7 +2952,7 @@ GameFeaturesBox:AddButton({
 	end
 })
 
-GameFeaturesBox:AddButton({
+AutoTab:AddButton({
 	Text = 'Join Available Table',
 	DoubleClick = false,
 	Tooltip = 'Teleport and join an available table instantly',
@@ -1761,7 +2977,191 @@ GameFeaturesBox:AddButton({
 	end
 })
 
--- Removed old top-level Settings tab (now inside Word Search card)
+AutoTab:AddDivider()
+
+local AutoAnswerStatusLabel = AutoTab:AddLabel('Auto Answer: Disabled', true)
+
+AutoTab:AddToggle('AutoAnswer', {
+	Text = 'Auto Answer',
+	Default = false,
+	Tooltip = 'Automatically answer with best word when its your turn',
+	Callback = function(Value)
+		AutoAnswerEnabled = Value
+		if Value then
+			AutoAnswerStatusLabel:SetText('Auto Answer: Active')
+			StartAutoAnswer()
+		else
+			AutoAnswerStatusLabel:SetText('Auto Answer: Disabled')
+			StopAutoAnswer()
+		end
+	end
+}):AddKeyPicker('AutoAnswerKey', {
+	Default = 'F4',
+	SyncToggleState = true,
+	Mode = 'Toggle',
+	Text = 'Auto Answer Keybind',
+})
+
+-- Mode dropdown with dynamic slider presets
+AutoTab:AddDropdown('AutoAnswerMode', {
+	Values = {'Blatant', 'Legit'},
+	Default = 1,
+	Multi = false,
+	Text = 'Answer Mode',
+	Tooltip = 'Blatant = fast typing, Legit = human-like with common words',
+	Callback = function(Value)
+		AutoAnswerMode = Value
+		print("[Auto Answer] Mode set to: " .. Value)
+		
+		-- Apply presets based on mode
+		if Value == "Legit" then
+			-- Legit presets: slower, more human-like
+			AutoAnswerDelay = 0.5
+			AutoAnswerTypingDelay = 0.08
+			AutoAnswerLegitTypingVariation = 0.04
+			AutoAnswerWrongDelay = 2.0
+			AutoAnswerMinLength = 4
+			AutoAnswerMaxLength = 8
+			
+			-- Update sliders if they exist
+			if Options.AutoAnswerDelay then Options.AutoAnswerDelay:SetValue(0.5) end
+			if Options.AutoAnswerTypingDelay then Options.AutoAnswerTypingDelay:SetValue(0.08) end
+			if Options.AutoAnswerLegitVariation then Options.AutoAnswerLegitVariation:SetValue(0.04) end
+			if Options.AutoAnswerWrongDelay then Options.AutoAnswerWrongDelay:SetValue(2.0) end
+			if Options.AutoAnswerMinLen then Options.AutoAnswerMinLen:SetValue(4) end
+			if Options.AutoAnswerMaxLen then Options.AutoAnswerMaxLen:SetValue(8) end
+			
+			print("[Auto Answer] Applied Legit presets")
+		else
+			-- Blatant presets: fast
+			AutoAnswerDelay = 0.2
+			AutoAnswerTypingDelay = 0.02
+			AutoAnswerLegitTypingVariation = 0
+			AutoAnswerWrongDelay = 1.0
+			AutoAnswerMinLength = 3
+			AutoAnswerMaxLength = 15
+			
+			-- Update sliders if they exist
+			if Options.AutoAnswerDelay then Options.AutoAnswerDelay:SetValue(0.2) end
+			if Options.AutoAnswerTypingDelay then Options.AutoAnswerTypingDelay:SetValue(0.02) end
+			if Options.AutoAnswerLegitVariation then Options.AutoAnswerLegitVariation:SetValue(0) end
+			if Options.AutoAnswerWrongDelay then Options.AutoAnswerWrongDelay:SetValue(1.0) end
+			if Options.AutoAnswerMinLen then Options.AutoAnswerMinLen:SetValue(3) end
+			if Options.AutoAnswerMaxLen then Options.AutoAnswerMaxLen:SetValue(15) end
+			
+			print("[Auto Answer] Applied Blatant presets")
+		end
+	end
+})
+
+-- ===== SETTINGS TAB (All sliders) =====
+local AutoSettingsTab = AutoTabbox:AddTab('Settings')
+
+AutoSettingsTab:AddLabel('Auto Join Settings', true)
+
+AutoSettingsTab:AddSlider('AutoJoinDelay', {
+	Text = 'Scan Delay',
+	Default = 1,
+	Min = 0.5,
+	Max = 5,
+	Rounding = 1,
+	Suffix = 's',
+	Compact = false,
+	Tooltip = 'Delay between table scans',
+	Callback = function(Value)
+		AutoJoinDelay = Value
+	end
+})
+
+AutoSettingsTab:AddDivider()
+AutoSettingsTab:AddLabel('Auto Answer Settings', true)
+
+AutoSettingsTab:AddSlider('AutoAnswerDelay', {
+	Text = 'Start Delay',
+	Default = 0.3,
+	Min = 0.1,
+	Max = 3,
+	Rounding = 1,
+	Suffix = 's',
+	Compact = false,
+	Tooltip = 'Delay before starting to type answer',
+	Callback = function(Value)
+		AutoAnswerDelay = Value
+	end
+})
+
+AutoSettingsTab:AddSlider('AutoAnswerTypingDelay', {
+	Text = 'Typing Speed',
+	Default = 0.04,
+	Min = 0.01,
+	Max = 0.2,
+	Rounding = 2,
+	Suffix = 's',
+	Compact = false,
+	Tooltip = 'Delay between each character (lower = faster)',
+	Callback = function(Value)
+		AutoAnswerTypingDelay = Value
+	end
+})
+
+AutoSettingsTab:AddSlider('AutoAnswerLegitVariation', {
+	Text = 'Typing Variation',
+	Default = 0.03,
+	Min = 0,
+	Max = 0.1,
+	Rounding = 2,
+	Suffix = 's',
+	Compact = false,
+	Tooltip = 'Random variation for human-like typing (Legit mode)',
+	Callback = function(Value)
+		AutoAnswerLegitTypingVariation = Value
+	end
+})
+
+AutoSettingsTab:AddSlider('AutoAnswerWrongDelay', {
+	Text = 'Wrong Timeout',
+	Default = 1.5,
+	Min = 0.5,
+	Max = 5,
+	Rounding = 1,
+	Suffix = 's',
+	Compact = false,
+	Tooltip = 'Time to wait before retry on wrong answer',
+	Callback = function(Value)
+		AutoAnswerWrongDelay = Value
+	end
+})
+
+AutoSettingsTab:AddDivider()
+AutoSettingsTab:AddLabel('Word Filter', true)
+
+AutoSettingsTab:AddSlider('AutoAnswerMinLen', {
+	Text = 'Min Length',
+	Default = 3,
+	Min = 1,
+	Max = 10,
+	Rounding = 0,
+	Suffix = ' chars',
+	Compact = false,
+	Tooltip = 'Minimum word length',
+	Callback = function(Value)
+		AutoAnswerMinLength = Value
+	end
+})
+
+AutoSettingsTab:AddSlider('AutoAnswerMaxLen', {
+	Text = 'Max Length',
+	Default = 10,
+	Min = 3,
+	Max = 30,
+	Rounding = 0,
+	Suffix = ' chars',
+	Compact = false,
+	Tooltip = 'Maximum word length',
+	Callback = function(Value)
+		AutoAnswerMaxLength = Value
+	end
+})
 
 -- ==================== VISUAL TAB (ESP & CHAMS) ====================
 local ESPTabbox = Tabs.Visual:AddLeftTabbox('ESP & Chams')
